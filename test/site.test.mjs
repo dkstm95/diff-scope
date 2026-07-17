@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 
 import {
@@ -86,8 +86,9 @@ test("builds a deterministic, offline Pages site from the shipped renderer", asy
 
 test("site build CLI accepts only the documented output option", () => {
   assert.equal(parseBuildSiteArguments([]).clean, true);
-  assert.deepEqual(parseBuildSiteArguments(["--output", "/tmp/diff-scope-pages"]), {
-    output: "/tmp/diff-scope-pages",
+  const outputArgument = "/tmp/diff-scope-pages";
+  assert.deepEqual(parseBuildSiteArguments(["--output", outputArgument]), {
+    output: resolve(outputArgument),
     clean: false,
   });
   assert.throws(() => parseBuildSiteArguments(["--clean"]), /Usage/);
