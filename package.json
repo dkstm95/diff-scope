@@ -1,9 +1,9 @@
 {
-  "name": "diff-scope",
-  "version": "0.1.0-alpha",
+  "name": "hope",
+  "version": "0.2.0-alpha",
   "private": true,
   "type": "module",
-  "description": "Understand completed local code changes with explanations, quizzes, and interactive microworlds.",
+  "description": "Align intent before coding and understand the resulting change before merge.",
   "license": "MIT",
   "engines": {
     "node": ">=20"

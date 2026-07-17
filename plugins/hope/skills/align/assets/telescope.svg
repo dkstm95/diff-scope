@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">DiffScope telescope</title>
-  <desc id="desc">A minimal telescope aimed upward, representing a closer look at code changes.</desc>
+  <title id="title">Hope telescope</title>
+  <desc id="desc">A minimal telescope aimed upward, representing shared intent and a closer look at code changes.</desc>
   <rect width="512" height="512" rx="112" fill="#F4F5FF"/>
   <g transform="rotate(-20 256 216)" stroke="#22245B" stroke-linecap="round" stroke-linejoin="round">
     <path d="M154 200h214v78H154z" fill="#FFFFFF" stroke-width="22"/>

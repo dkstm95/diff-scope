@@ -1,14 +1,14 @@
 {
-  "name": "diff-scope",
+  "name": "hope",
   "interface": {
-    "displayName": "DiffScope"
+    "displayName": "Hope"
   },
   "plugins": [
     {
-      "name": "diff-scope",
+      "name": "hope",
       "source": {
         "source": "local",
-        "path": "./plugins/diff-scope"
+        "path": "./plugins/hope"
       },
       "policy": {
         "installation": "AVAILABLE",

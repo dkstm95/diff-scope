@@ -1,34 +1,44 @@
 #!/usr/bin/env node
 
-import { readFile, stat } from "node:fs/promises";
+import { readFile, rm, stat } from "node:fs/promises";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
 import { renderUnderstandingBundle } from "./lib/render-artifact.mjs";
+import { collectChangeContext } from "./collect-change-context.mjs";
 
 const MAX_INPUT_BYTES = 4 * 1024 * 1024;
 
 function usage() {
   return `Usage:
-  node render-diff.mjs --input <artifact.json> --context <change-context.json> [--output <new-directory>]
+  node render-diff.mjs --root <repo> --input <artifact.json> --context <change-context.json> [--intent <intent.json>] [--output <new-directory>]
 
 Options:
-  --input   ArtifactV1 JSON file to validate and render.
-  --context ChangeContextV1 JSON file that the artifact must exactly represent.
+  --root    Repository root to recollect immediately before and after output.
+  --input   ArtifactV2 JSON file to validate and render.
+  --context ChangeContextV2 JSON file that the artifact must exactly represent.
+  --intent  Optional IntentV1 JSON file that the artifact must embed exactly.
   --output  New directory for durable output. Existing paths are refused.
   --help    Show this help message.
 `;
 }
 
 export function parseRenderArguments(argumentsList) {
-  const parsed = { input: undefined, context: undefined, output: undefined, help: false };
+  const parsed = {
+    input: undefined,
+    context: undefined,
+    intent: undefined,
+    root: undefined,
+    output: undefined,
+    help: false,
+  };
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
     if (argument === "--help" || argument === "-h") {
       parsed.help = true;
       continue;
     }
-    if (!["--input", "--context", "--output"].includes(argument)) {
+    if (!["--root", "--input", "--context", "--intent", "--output"].includes(argument)) {
       throw new Error(`Unknown argument: ${argument}`);
     }
     const value = argumentsList[index + 1];
@@ -48,7 +58,27 @@ export function parseRenderArguments(argumentsList) {
   if (!parsed.help && parsed.context === undefined) {
     throw new Error("--context is required");
   }
+  if (!parsed.help && parsed.root === undefined) {
+    throw new Error("--root is required");
+  }
   return parsed;
+}
+
+export function assertLiveContextMatches(storedContext, liveContext) {
+  if (liveContext?.complete !== true) {
+    throw new Error(
+      "Refusing to render an incomplete live context; remove redactions and omissions, then recollect.",
+    );
+  }
+  if (
+    storedContext?.baseCommit !== liveContext.baseCommit ||
+    storedContext?.fingerprint !== liveContext.fingerprint
+  ) {
+    throw new Error(
+      "Stored ChangeContextV2 is stale because the live base commit or fingerprint changed.",
+    );
+  }
+  return liveContext;
 }
 
 export async function loadJsonDocument(inputPath, label = "Input") {
@@ -75,12 +105,31 @@ export async function main(argumentsList = process.argv.slice(2)) {
     return undefined;
   }
 
-  const artifact = await loadJsonDocument(parsed.input, "ArtifactV1 input");
-  const context = await loadJsonDocument(parsed.context, "ChangeContextV1 input");
-  const result = await renderUnderstandingBundle(artifact, {
+  const artifact = await loadJsonDocument(parsed.input, "ArtifactV2 input");
+  const context = await loadJsonDocument(parsed.context, "ChangeContextV2 input");
+  const intent =
+    parsed.intent === undefined
+      ? undefined
+      : await loadJsonDocument(parsed.intent, "IntentV1 input");
+  const liveContext = assertLiveContextMatches(
     context,
+    await collectChangeContext({ root: parsed.root }),
+  );
+  const result = await renderUnderstandingBundle(artifact, {
+    context: liveContext,
+    intent,
     outputDir: parsed.output,
   });
+  try {
+    const postWriteContext = await collectChangeContext({ root: parsed.root });
+    assertLiveContextMatches(liveContext, postWriteContext);
+  } catch (error) {
+    await rm(result.directory, { recursive: true, force: true });
+    throw new Error(
+      "Working tree changed before the bundle could be finalized; the new bundle was removed.",
+      { cause: error },
+    );
+  }
   process.stdout.write(`${result.directory}\n`);
   return result;
 }

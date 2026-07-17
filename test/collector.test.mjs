@@ -22,6 +22,7 @@ import {
   classifyGitMode,
   classifyPath,
   collectChangeContext,
+  assertStableCollectionPair,
   createDeadline,
   createGitEnvironment,
   mergeLimits,
@@ -29,8 +30,8 @@ import {
   readBoundedRegularFile,
   redactSensitiveText,
   writeContextFile,
-} from "../plugins/diff-scope/skills/diff/scripts/collect-change-context.mjs";
-import { isSafeRelativePosixPath } from "../plugins/diff-scope/skills/diff/scripts/lib/validate-artifact.mjs";
+} from "../plugins/hope/skills/diff/scripts/collect-change-context.mjs";
+import { isSafeRelativePosixPath } from "../plugins/hope/skills/diff/scripts/lib/validate-artifact.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -100,10 +101,13 @@ test("collects staged, unstaged, and safe untracked changes", async (t) => {
   await put(root, "service-account.json", '{"private_key":"must-never-read-service-account"}\n');
 
   const context = await collectChangeContext({ root });
+  const baseCommit = (await git(root, "rev-parse", "HEAD")).stdout.trim();
   const serialized = JSON.stringify(context);
   const sourcePatch = patchFor(context, "src/app.js");
 
-  assert.equal(context.schemaVersion, 1);
+  assert.equal(context.schemaVersion, 2);
+  assert.equal(context.baseCommit, baseCommit);
+  assert.equal(context.complete, false);
   assert.equal(context.scope.kind, "working-tree");
   assert.equal(context.scope.includeUntrackedBodies, true);
   assert.match(context.fingerprint, /^[a-f0-9]{64}$/u);
@@ -132,6 +136,179 @@ test("collects staged, unstaged, and safe untracked changes", async (t) => {
   assert.equal(serialized.includes(root), false);
   assert.ok(context.warnings.some((warning) => warning.includes("redacted")));
   assert.ok(context.warnings.some((warning) => warning.includes("safety or size policy")));
+});
+
+test("keeps raw stability private and marks redacted contexts incomplete", async (t) => {
+  const root = await makeRepository(t);
+  await put(root, "config.js", "export const value = 'safe';\n");
+  await commitAll(root, "initial");
+
+  await put(root, "config.js", "export const MY_AWS_SECRET_ACCESS_KEY = 'first-secret-value';\n");
+  const first = await collectChangeContext({ root });
+  await put(root, "config.js", "export const MY_AWS_SECRET_ACCESS_KEY = 'second-secret-value';\n");
+  const second = await collectChangeContext({ root });
+
+  assert.equal(first.complete, false);
+  assert.equal(second.complete, false);
+  assert.equal(Object.hasOwn(first, "sourceFingerprint"), false);
+  assert.equal(Object.hasOwn(first, "rawStabilityFingerprint"), false);
+  assert.doesNotMatch(JSON.stringify(first), /first-secret-value|second-secret-value/u);
+  assert.doesNotMatch(JSON.stringify(second), /first-secret-value|second-secret-value/u);
+});
+
+test("redacts compact assignment keys from real Git removal, addition, and JSON lines", async (t) => {
+  const root = await makeRepository(t);
+  await put(
+    root,
+    "config.txt",
+    [
+      "API_KEY=old-literal-secret",
+      "APIKEY=old-compact-api-secret",
+      "SECRETACCESSKEY=old-compact-access-secret",
+      '"api_key":"old-no-space-json-secret"',
+      '{"privatekey":"old-json-secret","clientsecret":"old-client-secret"}',
+      'os.environ["API_KEY"] = "old-python-bracket-secret"',
+      "process.env['API_KEY'] = 'old-javascript-bracket-secret'",
+      '{ ["password"]: "old-computed-object-secret" }',
+      "{['API_KEY']='old-computed-map-secret'}",
+      'credentials?.["password"] = "old-optional-chain-secret"',
+      'process.env["API_KEY"] = process.env["SOURCE_API_KEY"]',
+      "os.environ['API_KEY'] = os.environ['SOURCE_API_KEY']",
+      '{ ["password"]: process.env["PASSWORD"] }',
+      'credentials?.["password"] = config["PASSWORD"]',
+      "ACCESS_TOKEN=${ACCESS_TOKEN}",
+      "PRIVATE_KEY=process.env.PRIVATE_KEY",
+      "mode=old",
+      "",
+    ].join("\n"),
+  );
+  await commitAll(root, "initial");
+  await put(
+    root,
+    "config.txt",
+    [
+      "API_KEY=new-literal-secret",
+      "APIKEY=new-compact-api-secret",
+      "SECRETACCESSKEY=new-compact-access-secret",
+      '"api_key":"new-no-space-json-secret"',
+      '{"privatekey":"new-json-secret","clientsecret":"new-client-secret"}',
+      'os.environ["API_KEY"] = "new-python-bracket-secret"',
+      "process.env['API_KEY'] = 'new-javascript-bracket-secret'",
+      '{ ["password"]: "new-computed-object-secret" }',
+      "{['API_KEY']='new-computed-map-secret'}",
+      'credentials?.["password"] = "new-optional-chain-secret"',
+      'process.env["API_KEY"] = process.env["SOURCE_API_KEY"]',
+      "os.environ['API_KEY'] = os.environ['SOURCE_API_KEY']",
+      '{ ["password"]: process.env["PASSWORD"] }',
+      'credentials?.["password"] = config["PASSWORD"]',
+      "ACCESS_TOKEN=${ACCESS_TOKEN}",
+      "PRIVATE_KEY=process.env.PRIVATE_KEY",
+      "mode=new",
+      "",
+    ].join("\n"),
+  );
+
+  const context = await collectChangeContext({ root });
+  const patch = patchFor(context, "config.txt");
+
+  assert.equal(context.complete, false);
+  assert.match(patch, /-API_KEY=\[REDACTED\]/u);
+  assert.match(patch, /\+API_KEY=\[REDACTED\]/u);
+  assert.match(patch, /-APIKEY=\[REDACTED\]/u);
+  assert.match(patch, /\+APIKEY=\[REDACTED\]/u);
+  assert.match(patch, /-SECRETACCESSKEY=\[REDACTED\]/u);
+  assert.match(patch, /\+SECRETACCESSKEY=\[REDACTED\]/u);
+  assert.match(patch, /-"api_key":"\[REDACTED\]"/u);
+  assert.match(patch, /\+"api_key":"\[REDACTED\]"/u);
+  assert.match(patch, /-\{"privatekey":"\[REDACTED\]","clientsecret":"\[REDACTED\]"\}/u);
+  assert.match(patch, /\+\{"privatekey":"\[REDACTED\]","clientsecret":"\[REDACTED\]"\}/u);
+  assert.match(patch, /-os\.environ\["API_KEY"\] = "\[REDACTED\]"/u);
+  assert.match(patch, /\+os\.environ\["API_KEY"\] = "\[REDACTED\]"/u);
+  assert.match(patch, /-process\.env\['API_KEY'\] = '\[REDACTED\]'/u);
+  assert.match(patch, /\+process\.env\['API_KEY'\] = '\[REDACTED\]'/u);
+  assert.match(patch, /-\{ \["password"\]: "\[REDACTED\]" \}/u);
+  assert.match(patch, /\+\{ \["password"\]: "\[REDACTED\]" \}/u);
+  assert.match(patch, /-\{\['API_KEY'\]='\[REDACTED\]'\}/u);
+  assert.match(patch, /\+\{\['API_KEY'\]='\[REDACTED\]'\}/u);
+  assert.match(patch, /-credentials\?\.\["password"\] = "\[REDACTED\]"/u);
+  assert.match(patch, /\+credentials\?\.\["password"\] = "\[REDACTED\]"/u);
+  assert.match(patch, / process\.env\["API_KEY"\] = process\.env\["SOURCE_API_KEY"\]/u);
+  assert.match(patch, / os\.environ\['API_KEY'\] = os\.environ\['SOURCE_API_KEY'\]/u);
+  assert.match(patch, / \{ \["password"\]: process\.env\["PASSWORD"\] \}/u);
+  assert.match(patch, / credentials\?\.\["password"\] = config\["PASSWORD"\]/u);
+  assert.match(patch, / ACCESS_TOKEN=\$\{ACCESS_TOKEN\}/u);
+  assert.match(patch, / PRIVATE_KEY=process\.env\.PRIVATE_KEY/u);
+  assert.doesNotMatch(
+    JSON.stringify(context),
+    /old-literal-secret|new-literal-secret|old-compact-api-secret|new-compact-api-secret|old-compact-access-secret|new-compact-access-secret|old-no-space-json-secret|new-no-space-json-secret|old-json-secret|new-json-secret|old-client-secret|new-client-secret|old-python-bracket-secret|new-python-bracket-secret|old-javascript-bracket-secret|new-javascript-bracket-secret|old-computed-object-secret|new-computed-object-secret|old-computed-map-secret|new-computed-map-secret|old-optional-chain-secret|new-optional-chain-secret/u,
+  );
+});
+
+test("redacts final static bracket keys across container syntax and preserves bare references", () => {
+  const sensitiveLines = [
+    '+credentials["nested"]["password"] = "nested-container-sentinel"',
+    '-getCredentials()["password"] = "call-result-sentinel"',
+    '(credentials)["password"] = "parenthesized-container-sentinel"',
+    'credentials["pass\\u0077ord"] = "unicode-key-sentinel"',
+    'credentials["pass\\x77ord"] = "hex-key-sentinel"',
+    "credentials[`password`] = `backtick-rhs-sentinel`",
+    'credentials["password"] = "process.env.PASSWORD-quoted-sentinel"',
+    'credentials["password"] = "process.env.PASSWORD"',
+  ];
+  const safeLines = [
+    'credentials["password"] = config?.["PASSWORD"]',
+    'credentials["password"] = config?.password',
+    'credentials["password"] = process.env.PASSWORD',
+    'credentials["password"] = "[REDACTED]"',
+    "credentials[`password`] = `${PASSWORD}`",
+    'credentials["password"] === candidate',
+    'credentials["password"] == candidate',
+    'credentials["password"] => candidate',
+  ];
+  const source = [...sensitiveLines, ...safeLines].join("\n");
+  const redacted = redactSensitiveText(source);
+
+  assert.ok(redacted.redactions >= sensitiveLines.length);
+  assert.doesNotMatch(redacted.text, /(?:container|result|key|rhs|quoted)-sentinel/u);
+  assert.doesNotMatch(redacted.text, /"process\.env\.PASSWORD"/u);
+  assert.match(
+    redacted.text,
+    /\+credentials\["nested"\]\["password"\] = "\[REDACTED\]"/u,
+  );
+  assert.match(redacted.text, /-getCredentials\(\)\["password"\] = "\[REDACTED\]"/u);
+  assert.match(redacted.text, /\(credentials\)\["password"\] = "\[REDACTED\]"/u);
+  assert.match(redacted.text, /credentials\["pass\\u0077ord"\] = "\[REDACTED\]"/u);
+  assert.match(redacted.text, /credentials\["pass\\x77ord"\] = "\[REDACTED\]"/u);
+  assert.match(redacted.text, /credentials\[`password`\] = `\[REDACTED\]`/u);
+  assert.match(
+    redacted.text,
+    /credentials\["password"\] = "\[REDACTED\]"/u,
+  );
+  for (const safeLine of safeLines) {
+    assert.match(redacted.text, new RegExp(safeLine.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
+  }
+});
+
+test("rejects consecutive collections that differ in visible or private raw state", () => {
+  const stableContext = {
+    baseCommit: "1".repeat(40),
+    fingerprint: "a".repeat(64),
+  };
+  assert.equal(
+    assertStableCollectionPair(
+      { context: stableContext, rawStabilityFingerprint: "raw-a" },
+      { context: stableContext, rawStabilityFingerprint: "raw-a" },
+    ),
+    stableContext,
+  );
+  assert.throws(
+    () =>
+      assertStableCollectionPair(
+        { context: stableContext, rawStabilityFingerprint: "raw-a" },
+        { context: stableContext, rawStabilityFingerprint: "raw-b" },
+      ),
+    /changed during collection/u,
+  );
 });
 
 test("reads safe untracked bodies and redacts them", async (t) => {
@@ -182,6 +359,93 @@ test("marks partial bounded context incomplete and rejects an entirely omitted c
     collectChangeContext({ root, limits: { changedLines: 1 } }),
     /No explainable text changes were collected \(changed-line-limit\)/u,
   );
+});
+
+test("fatally decodes tracked UTF-8 and excludes invalid bytes with private stability state", async (t) => {
+  const root = await makeRepository(t);
+  await put(root, "safe.txt", "old safe text\n");
+  await put(root, "invalid.txt", "old valid text\n");
+  await commitAll(root, "initial");
+  await put(root, "safe.txt", "new safe text\n");
+  await put(root, "invalid.txt", Buffer.from([0x6e, 0x65, 0x77, 0x20, 0x80, 0x0a]));
+
+  const context = await collectChangeContext({ root });
+  const invalid = context.files.find((file) => file.path === "invalid.txt");
+  const serialized = JSON.stringify(context);
+
+  assert.equal(context.complete, false);
+  assert.equal(invalid?.bodyIncluded, false);
+  assert.equal(invalid?.omissionReason, "binary-or-invalid-utf8");
+  assert.equal(patchFor(context, "invalid.txt"), undefined);
+  assert.match(patchFor(context, "safe.txt"), /new safe text/u);
+  assert.ok(
+    context.excluded.some(
+      (entry) => entry.path === "invalid.txt" && entry.reason === "binary-or-invalid-utf8",
+    ),
+  );
+  assert.equal(serialized.includes("�"), false);
+  assert.equal(Object.hasOwn(context, "rawStabilityFingerprint"), false);
+  assert.equal(Object.hasOwn(context, "sourceFingerprint"), false);
+});
+
+test("rejects an unresolved index without disclosing conflict paths", async (t) => {
+  const root = await makeRepository(t);
+  await put(root, "confidential-conflict-name.txt", "base\n");
+  await commitAll(root, "initial");
+  const primaryBranch = (await git(root, "branch", "--show-current")).stdout.trim();
+
+  await git(root, "checkout", "-q", "-b", "conflict-side");
+  await put(root, "confidential-conflict-name.txt", "side\n");
+  await commitAll(root, "side change");
+
+  await git(root, "checkout", "-q", primaryBranch);
+  await put(root, "confidential-conflict-name.txt", "primary\n");
+  await commitAll(root, "primary change");
+  await assert.rejects(git(root, "merge", "--no-edit", "conflict-side"));
+
+  await assert.rejects(
+    collectChangeContext({ root }),
+    (error) =>
+      /Unresolved index entries found/u.test(error.message) &&
+      !error.message.includes("confidential-conflict-name.txt"),
+  );
+});
+
+test("refuses hidden index flags without exposing paths or mutating the index", async (t) => {
+  const cases = [
+    { label: "skip-worktree", flags: ["--skip-worktree"] },
+    { label: "assume-unchanged", flags: ["--assume-unchanged"] },
+    {
+      label: "both flags",
+      flags: ["--skip-worktree", "--assume-unchanged"],
+    },
+  ];
+
+  for (const { label, flags } of cases) {
+    await t.test(label, async (t) => {
+      const root = await makeRepository(t);
+      const hiddenPath = "confidential-hidden-change.txt";
+      await put(root, hiddenPath, "committed\n");
+      await commitAll(root, "initial");
+      await git(root, "update-index", ...flags, "--", hiddenPath);
+      await put(root, hiddenPath, "dirty but hidden\n");
+
+      assert.equal((await git(root, "status", "--porcelain=v1")).stdout, "");
+      const before = (await git(root, "ls-files", "-v", "--", hiddenPath)).stdout;
+      assert.match(before, /^(?:S|[a-z]) /u);
+
+      await assert.rejects(
+        collectChangeContext({ root }),
+        (error) =>
+          /skip-worktree or assume-unchanged index flags/u.test(error.message) &&
+          !error.message.includes(hiddenPath),
+      );
+
+      const after = (await git(root, "ls-files", "-v", "--", hiddenPath)).stdout;
+      assert.equal(after, before);
+      assert.equal(await readFile(path.join(root, hiddenPath), "utf8"), "dirty but hidden\n");
+    });
+  }
 });
 
 test("fails clearly when there are no explainable local changes", async (t) => {
@@ -315,6 +579,7 @@ test("writes mode-restricted output and refuses existing or symlink paths", asyn
     assert.equal((await lstat(defaultDirectory)).mode & 0o777, 0o700);
     assert.equal((await lstat(defaultOutput)).mode & 0o777, 0o600);
   }
+  assert.match(path.basename(defaultDirectory), /^hope-/u);
   assert.equal(JSON.parse(await readFile(defaultOutput, "utf8")).fingerprint, context.fingerprint);
 
   const explicitDirectory = await mkdtemp(path.join(tmpdir(), "collector-output-"));
@@ -345,7 +610,7 @@ test("classifies sensitive paths and Git modes without broad generated-name fals
   assert.equal(classifyPath("src/client.generated.ts"), "generated-or-lockfile");
   assert.equal(classifyPath("understanding-ai-generated-code.md"), null);
   assert.equal(classifyPath("../escape.txt"), "unsafe-path");
-  assert.equal(classifyPath(`${"😀".repeat(151)}.md`), "unsafe-path");
+  assert.equal(classifyPath(`${"😀".repeat(301)}.md`), "unsafe-path");
   assert.equal(classifyPath(" leading.txt"), "unsafe-path");
   assert.equal(classifyPath("trailing.txt "), "unsafe-path");
   assert.equal(classifyPath("~/config.txt"), "unsafe-path");
@@ -375,6 +640,26 @@ test("redacts PEM blocks, tokens, credentials, and assignment values", () => {
     "secret-access-key=unquoted-aws-secret",
     "temporary credential ASIAFEDCBA0987654321",
     "https://person:password@example.test/path",
+    "postgresql://database-user:database-password@example.test/data",
+    "ssh+git://git-user:git-password@example.test/repository",
+    "api_key=${API_KEY}",
+    "private_key=process.env.PRIVATE_KEY",
+    "MYAPIKEY=compact-suffix-literal",
+    "password = hash(input)",
+    "password = hash (input)",
+    "password = multiword literal secret value",
+    'password = reveal("call literal secret value")',
+    'password = reveal ("spaced call literal secret value")',
+    'password = reveal("call value") + trailing call sentinel',
+    'os.environ["API_KEY"] = "python-bracket-literal"',
+    "process.env['API_KEY'] = 'javascript-bracket-literal'",
+    '{ ["password"]: "computed-object-literal" }',
+    "{['API_KEY']='computed-map-literal'}",
+    'credentials?.["password"] = "optional-chain-literal"',
+    'process.env["API_KEY"] = process.env["SOURCE_API_KEY"]',
+    "os.environ['API_KEY'] = os.environ['SOURCE_API_KEY']",
+    '{ ["password"]: process.env["PASSWORD"] }',
+    'credentials?.["password"] = config["PASSWORD"]',
   ].join("\n");
   const result = redactSensitiveText(input);
 
@@ -385,16 +670,129 @@ test("redacts PEM blocks, tokens, credentials, and assignment values", () => {
   assert.match(result.text, /"private_key": "\[REDACTED\]"/u);
   assert.match(result.text, /private-key='\[REDACTED\]'/u);
   assert.match(result.text, /privateKey = "\[REDACTED\]"/u);
-  assert.match(result.text, /aws_access_key_id=\[REDACTED\]/u);
+  assert.match(result.text, /aws_access_key_id=\[REDACTED_TOKEN\]/u);
   assert.match(result.text, /secret_access_key="\[REDACTED\]"/u);
   assert.match(result.text, /secret-access-key=\[REDACTED\]/u);
   assert.match(result.text, /temporary credential \[REDACTED_TOKEN\]/u);
   assert.match(result.text, /https:\/\/\[REDACTED\]@example\.test/u);
+  assert.match(result.text, /postgresql:\/\/\[REDACTED\]@example\.test/u);
+  assert.match(result.text, /ssh\+git:\/\/\[REDACTED\]@example\.test/u);
+  assert.match(result.text, /api_key=\$\{API_KEY\}/u);
+  assert.match(result.text, /private_key=process\.env\.PRIVATE_KEY/u);
+  assert.match(result.text, /MYAPIKEY=\[REDACTED\]/u);
+  assert.match(result.text, /password = hash\(input\)/u);
+  assert.match(result.text, /password = hash \(input\)/u);
+  assert.match(result.text, /password = \[REDACTED\]/u);
+  assert.match(result.text, /os\.environ\["API_KEY"\] = "\[REDACTED\]"/u);
+  assert.match(result.text, /process\.env\['API_KEY'\] = '\[REDACTED\]'/u);
+  assert.match(result.text, /\{ \["password"\]: "\[REDACTED\]" \}/u);
+  assert.match(result.text, /\{\['API_KEY'\]='\[REDACTED\]'\}/u);
+  assert.match(result.text, /credentials\?\.\["password"\] = "\[REDACTED\]"/u);
+  assert.match(
+    result.text,
+    /process\.env\["API_KEY"\] = process\.env\["SOURCE_API_KEY"\]/u,
+  );
+  assert.match(
+    result.text,
+    /os\.environ\['API_KEY'\] = os\.environ\['SOURCE_API_KEY'\]/u,
+  );
+  assert.match(result.text, /\{ \["password"\]: process\.env\["PASSWORD"\] \}/u);
+  assert.match(
+    result.text,
+    /credentials\?\.\["password"\] = config\["PASSWORD"\]/u,
+  );
   assert.doesNotMatch(
     result.text,
-    /top-secret-material|abc\.def-ghi|sk-abcdefghijklmnopqrstuvwxyz|two words secret|base64-secret|private material|camel case key material|ASIA1234567890ABCDEF|aws secret access value|unquoted-aws-secret|ASIAFEDCBA0987654321|person:password/u,
+    /top-secret-material|abc\.def-ghi|sk-abcdefghijklmnopqrstuvwxyz|two words secret|base64-secret|private material|camel case key material|ASIA1234567890ABCDEF|aws secret access value|unquoted-aws-secret|ASIAFEDCBA0987654321|person:password|database-user:database-password|git-user:git-password|compact-suffix-literal|multiword literal secret value|call literal secret value|spaced call literal secret value|trailing call sentinel|python-bracket-literal|javascript-bracket-literal|computed-object-literal|computed-map-literal|optional-chain-literal/u,
   );
   assert.ok(result.redactions >= 4);
+});
+
+test("redacts one quoted continuation only across matching Git markers", () => {
+  const sensitive = [
+    'password =\n  "plain-continuation-sentinel"',
+    '+password =\n+  "addition-continuation-sentinel"',
+    "-password =\n-  'deletion-continuation-sentinel'",
+    ' password =\n   "context-continuation-sentinel"',
+  ];
+  const safeReference = 'password =\n  config?.["PASSWORD"]';
+  const safeEmptyValues = ['password = ""', 'password =\n  ""'];
+  const mismatchedMarker = '+password =\n-  "mismatched-marker-sentinel"';
+  const result = redactSensitiveText(
+    [...sensitive, safeReference, ...safeEmptyValues, mismatchedMarker].join("\n"),
+  );
+
+  assert.equal(result.redactions, sensitive.length);
+  assert.doesNotMatch(result.text, /(?:plain|addition|deletion|context)-continuation-sentinel/u);
+  assert.match(result.text, /password =\n  "\[REDACTED\]"/u);
+  assert.match(result.text, /\+password =\n\+  "\[REDACTED\]"/u);
+  assert.match(result.text, /-password =\n-  '\[REDACTED\]'/u);
+  assert.match(result.text, / password =\n   "\[REDACTED\]"/u);
+  assert.match(result.text, /password =\n  config\?\.\["PASSWORD"\]/u);
+  assert.match(result.text, /password = ""/u);
+  assert.match(result.text, /password =\n  ""/u);
+  assert.match(result.text, /\+password =\n-  "mismatched-marker-sentinel"/u);
+
+  const crlf = redactSensitiveText(
+    'before\r\npassword =\r\n  "crlf-continuation-sentinel"\r\nafter\r\n',
+  );
+  assert.equal(
+    crlf.text,
+    'before\r\npassword =\r\n  "[REDACTED]"\r\nafter\r\n',
+  );
+  assert.equal(crlf.redactions, 1);
+
+  const contextTransition = redactSensitiveText(
+    ' password =\n-  "old-context-sentinel"\n+  "new-context-sentinel"\n next',
+  );
+  assert.equal(
+    contextTransition.text,
+    ' password =\n-  "[REDACTED]"\n+  "[REDACTED]"\n next',
+  );
+  assert.equal(contextTransition.redactions, 2);
+
+  const contextRemoval = redactSensitiveText(
+    ' password =\n-  "removed-only-context-sentinel"\n next',
+  );
+  assert.equal(
+    contextRemoval.text,
+    ' password =\n-  "[REDACTED]"\n next',
+  );
+  assert.equal(contextRemoval.redactions, 1);
+
+  const contextAddition = redactSensitiveText(
+    ' password =\n+  "added-only-context-sentinel"\n next',
+  );
+  assert.equal(
+    contextAddition.text,
+    ' password =\n+  "[REDACTED]"\n next',
+  );
+  assert.equal(contextAddition.redactions, 1);
+
+  const multilineCall = redactSensitiveText(
+    'password = reveal (\n  "multiline-call-sentinel"\n)',
+  );
+  assert.equal(multilineCall.text, 'password = reveal (\n  "[REDACTED]"\n)');
+  assert.equal(multilineCall.redactions, 1);
+
+  const contextCall = redactSensitiveText(
+    ' password = reveal(\n-  "old-call-sentinel"\n+  "new-call-sentinel"',
+  );
+  assert.equal(
+    contextCall.text,
+    ' password = reveal(\n-  "[REDACTED]"\n+  "[REDACTED]"',
+  );
+  assert.equal(contextCall.redactions, 2);
+
+  for (const safe of [
+    "password = hash (input)",
+    "password = hash(\n  input\n)",
+    'password =\r\n  config?.["PASSWORD"]\r\n',
+    'password =\n-  "unmarked-transition"\n+  "unmarked-new"',
+    '+password =\n-  "mismatched-transition"\n+  "mismatched-new"',
+  ]) {
+    assert.deepEqual(redactSensitiveText(safe), { text: safe, redactions: 0 });
+  }
 });
 
 test("parses only the supported CLI surface", () => {
@@ -441,7 +839,7 @@ test("uses one deterministic overall deadline budget", () => {
   assert.throws(() => deadline.remainingMs(), /overall 10000ms deadline/u);
 });
 
-test("allows only tighter collector limits within ChangeContextV1 caps", () => {
+test("allows only tighter collector limits within ChangeContextV2 caps", () => {
   assert.equal(mergeLimits({ maxFiles: 12 }).maxFiles, 12);
   assert.throws(() => mergeLimits({ maxFiles: 81 }), /cannot exceed 80/u);
   assert.throws(() => mergeLimits({ changedLines: 4_001 }), /cannot exceed 4000/u);

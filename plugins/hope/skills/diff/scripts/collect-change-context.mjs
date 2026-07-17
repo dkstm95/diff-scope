@@ -14,10 +14,14 @@ import { clearTimeout, setTimeout } from "node:timers";
 import { fileURLToPath } from "node:url";
 import { TextDecoder } from "node:util";
 
+import { canonicalizeJson } from "../../align/scripts/lib/validate-intent.mjs";
+
 const GIT_PREFIX = ["--no-pager", "--literal-pathspecs", "-c", "core.fsmonitor=false"];
 const METADATA_MAX_BYTES = 8 * 1024 * 1024;
 const WINDOWS_DRIVE_PATTERN = /^[a-zA-Z]:/;
 const URL_SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+const CHANGE_CONTEXT_FINGERPRINT_DOMAIN = "hope:change-context:v2\0";
+const RAW_STABILITY_FINGERPRINT_DOMAIN = "hope:change-raw-stability:v1\0";
 
 export const DEFAULT_LIMITS = Object.freeze({
   totalPatchBytes: 256 * 1024,
@@ -258,6 +262,30 @@ function completeNulFields(buffer) {
   return fields;
 }
 
+function hasHiddenIndexFlags(buffer) {
+  let offset = 0;
+  while (offset < buffer.length) {
+    const end = buffer.indexOf(0, offset);
+    if (end < 0 || end - offset < 2 || buffer[offset + 1] !== 0x20) {
+      return true;
+    }
+    const tag = buffer[offset];
+    if (tag === 0x53 || (tag >= 0x61 && tag <= 0x7a)) {
+      return true;
+    }
+    offset = end + 1;
+  }
+  return false;
+}
+
+function assertNoHiddenIndexFlags(result) {
+  if (result.truncated || hasHiddenIndexFlags(result.stdout)) {
+    throw new Error(
+      "Hope $hope:diff refuses repositories with skip-worktree or assume-unchanged index flags; clear those flags and retry.",
+    );
+  }
+}
+
 function hasControlCharacters(value) {
   for (const character of value) {
     const codePoint = character.codePointAt(0);
@@ -272,7 +300,7 @@ function isSafeRelativePath(value) {
   if (
     typeof value !== "string" ||
     value.length === 0 ||
-    value.length > 300 ||
+    Array.from(value).length > 300 ||
     value.startsWith("/") ||
     value.startsWith("~") ||
     value.includes("\\") ||
@@ -418,25 +446,358 @@ function statusName(statusCode) {
   return STATUS_NAMES[statusCode.charAt(0)] ?? "unknown";
 }
 
-function redactAssignmentValues(line) {
-  const doubleQuoted = line.replace(
-    /((?:secret[_-]?access[_-]?key|access[_-]?key(?:[_-]?id)?|password|passwd|pwd|secret|token|api[_-]?key|client[_-]?secret|private[_-]?key)["']?\s*[:=]\s*)"(?:\\.|[^"\\])*"/giu,
-    '$1"[REDACTED]"',
-  );
-  const singleQuoted = doubleQuoted.replace(
-    /((?:secret[_-]?access[_-]?key|access[_-]?key(?:[_-]?id)?|password|passwd|pwd|secret|token|api[_-]?key|client[_-]?secret|private[_-]?key)["']?\s*[:=]\s*)'(?:\\.|[^'\\])*'/giu,
-    "$1'[REDACTED]'",
-  );
-  return singleQuoted.replace(
-    /((?:secret[_-]?access[_-]?key|access[_-]?key(?:[_-]?id)?|password|passwd|pwd|secret|token|api[_-]?key|client[_-]?secret|private[_-]?key)["']?\s*[:=]\s*)([^\s,"';}\]]+)/giu,
-    "$1[REDACTED]",
+const ASSIGNMENT_PATTERN =
+  /(?:^|[\s,{;])(?:(?:(['"])((?:\\.|[^'"\\\r\n])*)\1)|([A-Za-z0-9_./:@-]+))[ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|((?:\$\{[^}\r\n]+\}(?=[ \t]*(?:[,;}\]]|\r?$))|\$\{[^}\r\n]+\}[^\r\n,;}]*|(?:\[|<)?[Rr][Ee][Dd][Aa][Cc][Tt][Ee][Dd](?:\]|>)?|[^\r\n,;}]+)))/gmu;
+
+const BRACKETED_ASSIGNMENT_PATTERN =
+  /\[[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`)[ \t]*\][ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|((?:\$\{[^}\r\n]+\}(?=[ \t]*(?:[,;}\]]|\r?$))|\$\{[^}\r\n]+\}[^\r\n,;}]*|(?:\[|<)?[Rr][Ee][Dd][Aa][Cc][Tt][Ee][Dd](?:\]|>)?|[^\r\n,;}]+)))/gmu;
+
+const CONTINUED_ASSIGNMENT_HEAD_PATTERN =
+  /(?:^|[\s,{;])(?:(?:(['"])((?:\\.|[^'"\\\r\n])*)\1)|([A-Za-z0-9_./:@-]+))[ \t]*(?::|=(?!=|>))[ \t]*(?:[A-Za-z_$][A-Za-z0-9_$.]*[ \t]*\([ \t]*)?\r?$/u;
+
+const BRACKETED_CONTINUED_ASSIGNMENT_HEAD_PATTERN =
+  /\[[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`)[ \t]*\][ \t]*(?::|=(?!=|>))[ \t]*(?:[A-Za-z_$][A-Za-z0-9_$.]*[ \t]*\([ \t]*)?\r?$/u;
+
+const CONTINUED_QUOTED_VALUE_PATTERN =
+  /^[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`)[ \t]*[,;}]?[ \t]*\r?$/u;
+
+const SENSITIVE_KEY_SEQUENCES = [
+  ["api", "key"],
+  ["secret", "access", "key"],
+  ["secret", "key"],
+  ["private", "key"],
+  ["client", "secret"],
+  ["access", "token"],
+  ["auth", "token"],
+  ["refresh", "token"],
+];
+
+const SENSITIVE_COMPACT_KEYS = new Set([
+  "apikey",
+  "secretaccesskey",
+  "secretkey",
+  "privatekey",
+  "clientsecret",
+  "accesstoken",
+  "authtoken",
+  "refreshtoken",
+]);
+
+const SENSITIVE_TERMINAL_KEY_TOKENS = new Set([
+  "password",
+  "passwd",
+  "pwd",
+  "secret",
+  "token",
+]);
+
+function assignmentKeyTokens(rawKey) {
+  return rawKey
+    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .filter(Boolean);
+}
+
+function isSensitiveAssignmentKey(rawKey) {
+  const tokens = assignmentKeyTokens(rawKey);
+  if (tokens.length === 0 || SENSITIVE_TERMINAL_KEY_TOKENS.has(tokens.at(-1))) {
+    return tokens.length > 0;
+  }
+  if (
+    tokens.some((token) =>
+      [...SENSITIVE_COMPACT_KEYS].some(
+        (compactKey) => token === compactKey || token.endsWith(compactKey),
+      ),
+    )
+  ) {
+    return true;
+  }
+  return SENSITIVE_KEY_SEQUENCES.some((sequence) =>
+    sequence.length <= tokens.length &&
+    tokens.some((_, start) =>
+      sequence.every((token, offset) => tokens[start + offset] === token),
+    ),
   );
 }
 
-export function redactSensitiveText(value) {
-  const lines = value.split("\n");
-  const result = [];
+function decodeStaticAssignmentKey(rawKey, delimiter) {
+  let decoded = "";
+
+  for (let index = 0; index < rawKey.length; index += 1) {
+    const character = rawKey[index];
+    if (delimiter === "`" && character === "$" && rawKey[index + 1] === "{") {
+      return null;
+    }
+    if (character !== "\\") {
+      decoded += character;
+      continue;
+    }
+
+    index += 1;
+    if (index >= rawKey.length) {
+      return null;
+    }
+    const escaped = rawKey[index];
+    const simpleEscapes = {
+      0: "\0",
+      b: "\b",
+      f: "\f",
+      n: "\n",
+      r: "\r",
+      t: "\t",
+      v: "\v",
+    };
+    if (Object.hasOwn(simpleEscapes, escaped)) {
+      if (escaped === "0" && /[0-9]/u.test(rawKey[index + 1] ?? "")) {
+        return null;
+      }
+      decoded += simpleEscapes[escaped];
+      continue;
+    }
+    if (escaped === "\n") {
+      continue;
+    }
+    if (escaped === "\r") {
+      if (rawKey[index + 1] === "\n") {
+        index += 1;
+      }
+      continue;
+    }
+    if (escaped === "x") {
+      const hex = rawKey.slice(index + 1, index + 3);
+      if (!/^[a-f0-9]{2}$/iu.test(hex)) {
+        return null;
+      }
+      decoded += String.fromCodePoint(Number.parseInt(hex, 16));
+      index += 2;
+      continue;
+    }
+    if (escaped === "u") {
+      if (rawKey[index + 1] === "{") {
+        const end = rawKey.indexOf("}", index + 2);
+        const hex = end === -1 ? "" : rawKey.slice(index + 2, end);
+        const codePoint = /^[a-f0-9]{1,6}$/iu.test(hex) ? Number.parseInt(hex, 16) : -1;
+        if (codePoint < 0 || codePoint > 0x10ffff) {
+          return null;
+        }
+        decoded += String.fromCodePoint(codePoint);
+        index = end;
+        continue;
+      }
+      const hex = rawKey.slice(index + 1, index + 5);
+      if (!/^[a-f0-9]{4}$/iu.test(hex)) {
+        return null;
+      }
+      decoded += String.fromCodePoint(Number.parseInt(hex, 16));
+      index += 4;
+      continue;
+    }
+
+    decoded += escaped;
+  }
+
+  return decoded;
+}
+
+function splitDiffMarker(line) {
+  if (/^[+\- ]/u.test(line)) {
+    return { marker: line.charAt(0), body: line.slice(1) };
+  }
+  return { marker: "", body: line };
+}
+
+function parseContinuedAssignmentHead(line) {
+  const { marker, body } = splitDiffMarker(line);
+  const bareMatch = CONTINUED_ASSIGNMENT_HEAD_PATTERN.exec(body);
+  if (bareMatch !== null) {
+    const rawKey = bareMatch[2] ?? bareMatch[3] ?? "";
+    const key = bareMatch[2] === undefined
+      ? rawKey
+      : decodeStaticAssignmentKey(rawKey, bareMatch[1]);
+    return key === null ? null : { marker, key };
+  }
+
+  const bracketedMatch = BRACKETED_CONTINUED_ASSIGNMENT_HEAD_PATTERN.exec(body);
+  if (bracketedMatch === null) {
+    return null;
+  }
+  const rawKey = bracketedMatch[1] ?? bracketedMatch[2] ?? bracketedMatch[3] ?? "";
+  const delimiter = bracketedMatch[1] !== undefined
+    ? '"'
+    : bracketedMatch[2] !== undefined
+      ? "'"
+      : "`";
+  const key = decodeStaticAssignmentKey(rawKey, delimiter);
+  return key === null ? null : { marker, key };
+}
+
+function bodyForMatchingContinuation(line, marker) {
+  if (marker !== "") {
+    return line.startsWith(marker) ? line.slice(1) : null;
+  }
+  return /^[+\-]/u.test(line) ? null : line;
+}
+
+function continuedValueCandidates(lines, headIndex, marker) {
+  const nextLine = lines[headIndex + 1];
+  if (marker === " " && /^[+\-]/u.test(nextLine ?? "")) {
+    const candidates = [
+      { index: headIndex + 1, marker: nextLine.charAt(0), body: nextLine.slice(1) },
+    ];
+    if (nextLine.startsWith("-") && lines[headIndex + 2]?.startsWith("+")) {
+      candidates.push({
+        index: headIndex + 2,
+        marker: "+",
+        body: lines[headIndex + 2].slice(1),
+      });
+    }
+    return candidates;
+  }
+  const body = bodyForMatchingContinuation(nextLine ?? "", marker);
+  return body === null ? [] : [{ index: headIndex + 1, marker, body }];
+}
+
+function isExplicitSafeAssignmentPlaceholder(value) {
+  const normalized = value.trim();
+  const lower = normalized.toLowerCase();
+  return (
+    normalized.length === 0 ||
+    /^(?:\[?redacted\]?|<redacted>|placeholder|example|value|changeme|x+|\*+)$/u.test(lower) ||
+    /^<[^>]+>$|^\$\{[^}]+\}$/u.test(normalized) ||
+    /^(?:your|example)[_-]?[a-z0-9_-]+$/u.test(lower)
+  );
+}
+
+function isSafeUnquotedAssignmentReference(value) {
+  const normalized = value.trim();
+  const lower = normalized.toLowerCase();
+  return (
+    /^(?:null|undefined|none|false)$/u.test(lower) ||
+    /^\$[a-z_][a-z0-9_]*$/iu.test(normalized) ||
+    /^(?:process\.env|os\.environ|env|config|settings|secrets?)(?:(?:\.|\?\.)[a-z_$][a-z0-9_$.-]*|(?:\?\.)?[ \t]*\[[ \t]*(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`)[ \t]*\])+$/iu.test(
+      normalized,
+    )
+  );
+}
+
+function isSafeUnquotedAssignmentExpression(value) {
+  const normalized = value.trim();
+  return (
+    /^[a-z_$][a-z0-9_$.]*[ \t]*\([^\r\n"'`]*\)$/iu.test(normalized) ||
+    /^[a-z_$][a-z0-9_$.]*[ \t]*\([ \t]*$/iu.test(normalized)
+  );
+}
+
+function isSafeAssignmentValue(value, quoted) {
+  return (
+    isExplicitSafeAssignmentPlaceholder(value) ||
+    (!quoted &&
+      (isSafeUnquotedAssignmentReference(value) || isSafeUnquotedAssignmentExpression(value)))
+  );
+}
+
+function redactContinuedAssignmentValues(sourceLines) {
+  const lines = [...sourceLines];
   let redactions = 0;
+
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const head = parseContinuedAssignmentHead(lines[index]);
+    if (head === null || !isSensitiveAssignmentKey(head.key)) {
+      continue;
+    }
+    for (const candidate of continuedValueCandidates(lines, index, head.marker)) {
+      const continuation = CONTINUED_QUOTED_VALUE_PATTERN.exec(candidate.body);
+      if (continuation === null) {
+        continue;
+      }
+      const value = continuation[1] ?? continuation[2] ?? continuation[3] ?? "";
+      if (isSafeAssignmentValue(value, true)) {
+        continue;
+      }
+      const valueOffset = candidate.body.lastIndexOf(value);
+      if (valueOffset < 0) {
+        continue;
+      }
+      const redactedBody =
+        `${candidate.body.slice(0, valueOffset)}[REDACTED]` +
+        candidate.body.slice(valueOffset + value.length);
+      lines[candidate.index] = `${candidate.marker}${redactedBody}`;
+      redactions += 1;
+    }
+  }
+
+  return { lines, redactions };
+}
+
+function redactAssignmentValues(line) {
+  const diffMarker = /^[+\- ]/u.test(line) ? line.charAt(0) : "";
+  const body = diffMarker ? line.slice(1) : line;
+  ASSIGNMENT_PATTERN.lastIndex = 0;
+  const redactedBody = body.replace(
+    ASSIGNMENT_PATTERN,
+    (
+      match,
+      keyQuote,
+      quotedKey,
+      bareKey,
+      doubleValue,
+      singleValue,
+      backtickValue,
+      bareValue,
+    ) => {
+      const rawKey = quotedKey ?? bareKey ?? "";
+      const key = quotedKey === undefined ? rawKey : decodeStaticAssignmentKey(rawKey, keyQuote);
+      if (key === null || !isSensitiveAssignmentKey(key)) {
+        return match;
+      }
+      const value = doubleValue ?? singleValue ?? backtickValue ?? bareValue ?? "";
+      const quoted =
+        doubleValue !== undefined || singleValue !== undefined || backtickValue !== undefined;
+      if (isSafeAssignmentValue(value, quoted)) {
+        return match;
+      }
+      const valueOffset = match.lastIndexOf(value);
+      return `${match.slice(0, valueOffset)}[REDACTED]${match.slice(valueOffset + value.length)}`;
+    },
+  );
+  BRACKETED_ASSIGNMENT_PATTERN.lastIndex = 0;
+  const fullyRedactedBody = redactedBody.replace(
+    BRACKETED_ASSIGNMENT_PATTERN,
+    (
+      match,
+      doubleKey,
+      singleKey,
+      backtickKey,
+      doubleValue,
+      singleValue,
+      backtickValue,
+      bareValue,
+    ) => {
+      const rawKey = doubleKey ?? singleKey ?? backtickKey ?? "";
+      const delimiter = doubleKey !== undefined ? '"' : singleKey !== undefined ? "'" : "`";
+      const key = decodeStaticAssignmentKey(rawKey, delimiter);
+      if (key === null || !isSensitiveAssignmentKey(key)) {
+        return match;
+      }
+      const value = doubleValue ?? singleValue ?? backtickValue ?? bareValue ?? "";
+      const quoted =
+        doubleValue !== undefined || singleValue !== undefined || backtickValue !== undefined;
+      if (isSafeAssignmentValue(value, quoted)) {
+        return match;
+      }
+      const valueOffset = match.lastIndexOf(value);
+      return `${match.slice(0, valueOffset)}[REDACTED]${match.slice(valueOffset + value.length)}`;
+    },
+  );
+  return `${diffMarker}${fullyRedactedBody}`;
+}
+
+export function redactSensitiveText(value) {
+  const continued = redactContinuedAssignmentValues(value.split("\n"));
+  const lines = continued.lines;
+  const result = [];
+  let redactions = continued.redactions;
   let insidePem = false;
 
   for (const originalLine of lines) {
@@ -469,7 +830,10 @@ export function redactSensitiveText(value) {
         "[REDACTED_TOKEN]",
       ],
       [/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/gu, "[REDACTED_JWT]"],
-      [/https?:\/\/[^\s/@:]+:[^\s/@]+@/giu, "https://[REDACTED]@"],
+      [
+        /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/giu,
+        "$1[REDACTED]@",
+      ],
     ];
 
     for (const [pattern, replacement] of replacements) {
@@ -529,12 +893,13 @@ async function resolveRepository(root, deadline) {
   return repoRoot;
 }
 
-async function resolveDiffScope(repoRoot, deadline) {
-  await runGit(repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], {
+async function resolveWorkingTreeScope(repoRoot, deadline) {
+  const head = await runGit(repoRoot, ["rev-parse", "--verify", "HEAD^{commit}"], {
     timeoutMs: deadline.remainingMs(),
   });
   return {
     diffTarget: "HEAD",
+    baseCommit: head.stdout.toString("utf8").trim(),
     scope: {
       kind: "working-tree",
       comparison: "HEAD -> working tree (staged + unstaged + safe untracked)",
@@ -618,6 +983,20 @@ function makeUntrackedPatch(filePath, contents, lines) {
   ].join("\n");
 }
 
+function updateLengthPrefixed(hash, value) {
+  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value, "utf8");
+  const length = Buffer.alloc(8);
+  length.writeBigUInt64BE(BigInt(bytes.length));
+  hash.update(length);
+  hash.update(bytes);
+}
+
+function addRawStabilityFrame(state, kind, filePath, bytes) {
+  updateLengthPrefixed(state.rawStabilityHash, kind);
+  updateLengthPrefixed(state.rawStabilityHash, filePath);
+  updateLengthPrefixed(state.rawStabilityHash, bytes);
+}
+
 function exclusion(entry, reason) {
   entry.output.omissionReason = reason;
   return { path: entry.output.path, reason };
@@ -650,7 +1029,17 @@ async function includeTrackedBody(repoRoot, diffTarget, entry, state, limits, de
     return;
   }
 
-  const redacted = redactSensitiveText(result.stdout.toString("utf8"));
+  addRawStabilityFrame(state, "diff", entry.output.path, result.stdout);
+  let patchText;
+  try {
+    patchText = utf8Decoder.decode(result.stdout);
+  } catch {
+    state.complete = false;
+    state.excluded.push(exclusion(entry, "binary-or-invalid-utf8"));
+    return;
+  }
+
+  const redacted = redactSensitiveText(patchText);
   const patchBytes = Buffer.byteLength(redacted.text);
   if (state.patchBytes + patchBytes > limits.totalPatchBytes) {
     state.complete = false;
@@ -774,6 +1163,7 @@ async function includeUntrackedBody(repoRoot, entry, state, limits, deadline) {
   entry.output.additions = lines;
   entry.output.deletions = 0;
   entry.output.bodyIncluded = true;
+  addRawStabilityFrame(state, "untracked", entry.output.path, localFile.buffer);
   state.patchBytes += patchBytes;
   state.includedChangedLines += lines;
   state.redactions += redacted.redactions;
@@ -781,23 +1171,23 @@ async function includeUntrackedBody(repoRoot, entry, state, limits, deadline) {
 }
 
 function makeFingerprint(contextWithoutFingerprint) {
-  return createHash("sha256").update(JSON.stringify(contextWithoutFingerprint)).digest("hex");
+  return createHash("sha256")
+    .update(CHANGE_CONTEXT_FINGERPRINT_DOMAIN, "utf8")
+    .update(canonicalizeJson(contextWithoutFingerprint), "utf8")
+    .digest("hex");
 }
 
-export async function collectChangeContext({
-  root = process.cwd(),
-  limits: limitOverrides,
-} = {}) {
-  const limits = mergeLimits(limitOverrides);
-  const deadline = createDeadline(limits.timeoutMs);
+async function collectChangeContextOnce({ root, limits, deadline }) {
   const repoRoot = await resolveRepository(root, deadline);
-  const resolvedScope = await resolveDiffScope(repoRoot, deadline);
+  const resolvedScope = await resolveWorkingTreeScope(repoRoot, deadline);
 
   const metadataCommands = [
     makeDiffArgs(resolvedScope.diffTarget, ["--name-status", "-z"]),
     makeDiffArgs(resolvedScope.diffTarget, ["--raw", "-z"]),
     makeDiffArgs(resolvedScope.diffTarget, ["--numstat", "-z"]),
     ["ls-files", "--others", "--exclude-standard", "-z"],
+    ["ls-files", "--unmerged", "-z"],
+    ["ls-files", "-v", "-z"],
   ];
 
   const metadataResults = await Promise.all(
@@ -810,7 +1200,31 @@ export async function collectChangeContext({
         }),
     ),
   );
-  const [nameStatusResult, rawResult, numstatResult, untrackedResult] = metadataResults;
+  const [
+    nameStatusResult,
+    rawResult,
+    numstatResult,
+    untrackedResult,
+    unmergedResult,
+    indexFlagsResult,
+  ] = metadataResults;
+
+  assertNoHiddenIndexFlags(indexFlagsResult);
+  const finalIndexFlagsResult = await runGit(repoRoot, ["ls-files", "-v", "-z"], {
+    timeoutMs: deadline.remainingMs(),
+    maxBytes: METADATA_MAX_BYTES,
+    allowTruncated: true,
+  });
+  assertNoHiddenIndexFlags(finalIndexFlagsResult);
+
+  const nameStatusEntries = parseNameStatus(nameStatusResult.stdout);
+  if (
+    unmergedResult.truncated ||
+    unmergedResult.stdout.length > 0 ||
+    nameStatusEntries.some((entry) => entry.statusCode.includes("U"))
+  ) {
+    throw new Error("Unresolved index entries found; resolve conflicts before collecting changes.");
+  }
 
   const state = {
     complete: true,
@@ -818,6 +1232,7 @@ export async function collectChangeContext({
     includedChangedLines: 0,
     patchBytes: 0,
     patches: [],
+    rawStabilityHash: createHash("sha256").update(RAW_STABILITY_FINGERPRINT_DOMAIN, "utf8"),
     redactions: 0,
     warnings: [],
   };
@@ -830,9 +1245,7 @@ export async function collectChangeContext({
 
   const modes = parseRawModes(rawResult.stdout);
   const stats = parseNumstat(numstatResult.stdout);
-  const tracked = parseNameStatus(nameStatusResult.stdout).map((entry) =>
-    buildTrackedEntry(entry, modes, stats),
-  );
+  const tracked = nameStatusEntries.map((entry) => buildTrackedEntry(entry, modes, stats));
   const untracked = untrackedResult
     ? completeNulFields(untrackedResult.stdout).map((rawPath) => buildUntrackedEntry(rawPath))
     : [];
@@ -866,6 +1279,13 @@ export async function collectChangeContext({
     deadline.remainingMs();
   }
 
+  const postBodyIndexFlagsResult = await runGit(repoRoot, ["ls-files", "-v", "-z"], {
+    timeoutMs: deadline.remainingMs(),
+    maxBytes: METADATA_MAX_BYTES,
+    allowTruncated: true,
+  });
+  assertNoHiddenIndexFlags(postBodyIndexFlagsResult);
+
   if (state.patches.length === 0) {
     const reasons = [...new Set(state.excluded.map((item) => item.reason))].sort().join(", ");
     throw new Error(
@@ -875,12 +1295,14 @@ export async function collectChangeContext({
 
   const reportedOmissions = state.excluded;
   if (reportedOmissions.length > 0) {
+    state.complete = false;
     const reasons = [...new Set(reportedOmissions.map((item) => item.reason))].sort().join(", ");
     state.warnings.push(
       `${reportedOmissions.length} file body/bodies were excluded by safety or size policy (${reasons}).`,
     );
   }
   if (state.redactions > 0) {
+    state.complete = false;
     state.warnings.push(
       `${state.redactions} suspected secret value(s) were redacted from collected text.`,
     );
@@ -898,7 +1320,8 @@ export async function collectChangeContext({
     contextBytes: state.patchBytes,
   };
   const contextWithoutFingerprint = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    baseCommit: resolvedScope.baseCommit,
     scope: resolvedScope.scope,
     complete: state.complete,
     summary,
@@ -909,10 +1332,36 @@ export async function collectChangeContext({
   };
   deadline.remainingMs();
 
-  return {
+  const context = {
     ...contextWithoutFingerprint,
     fingerprint: makeFingerprint(contextWithoutFingerprint),
   };
+  return {
+    context,
+    rawStabilityFingerprint: state.rawStabilityHash.digest("hex"),
+  };
+}
+
+export function assertStableCollectionPair(first, second) {
+  if (
+    first?.context?.baseCommit !== second?.context?.baseCommit ||
+    first?.context?.fingerprint !== second?.context?.fingerprint ||
+    first?.rawStabilityFingerprint !== second?.rawStabilityFingerprint
+  ) {
+    throw new Error("Working tree changed during collection; retry after changes stop.");
+  }
+  return second.context;
+}
+
+export async function collectChangeContext({
+  root = process.cwd(),
+  limits: limitOverrides,
+} = {}) {
+  const limits = mergeLimits(limitOverrides);
+  const deadline = createDeadline(limits.timeoutMs);
+  const first = await collectChangeContextOnce({ root, limits, deadline });
+  const second = await collectChangeContextOnce({ root, limits, deadline });
+  return assertStableCollectionPair(first, second);
 }
 
 async function pathExists(targetPath) {
@@ -939,7 +1388,7 @@ export async function writeContextFile(context, output) {
     }
     directory = path.dirname(outputPath);
   } else {
-    directory = await mkdtemp(path.join(tmpdir(), "diff-scope-"));
+    directory = await mkdtemp(path.join(tmpdir(), "hope-"));
     await chmod(directory, 0o700);
     outputPath = path.join(directory, "change-context.json");
   }
@@ -993,7 +1442,7 @@ export function parseArguments(argv) {
 
 function helpText() {
   return [
-    "Collect a bounded, redacted Git ChangeContextV1 file.",
+    "Collect a bounded, redacted Git ChangeContextV2 file.",
     "",
     "Usage:",
     "  node collect-change-context.mjs [--root <repo>] [--output <new-file>]",
@@ -1012,7 +1461,7 @@ async function main() {
 
   const context = await collectChangeContext(options);
   const outputPath = await writeContextFile(context, options.output);
-  console.log(`ChangeContextV1 written to ${outputPath}`);
+  console.log(`ChangeContextV2 written to ${outputPath}`);
 }
 
 const isEntrypoint = process.argv[1]

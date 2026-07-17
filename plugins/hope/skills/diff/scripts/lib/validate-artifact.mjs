@@ -1,9 +1,18 @@
 import { createHash } from "node:crypto";
+import { Buffer } from "node:buffer";
+
+import {
+  calculateIntentFingerprint,
+  canonicalizeJson,
+  collectSecretIssues,
+  collectIntentIssues,
+} from "../../../align/scripts/lib/validate-intent.mjs";
 
 const ID_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/;
 const WINDOWS_DRIVE_PATTERN = /^[a-zA-Z]:/;
 const URL_SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+const CHANGE_CONTEXT_FINGERPRINT_DOMAIN = "hope:change-context:v2\0";
 
 function hasControlCharacter(value) {
   return Array.from(value).some((character) => {
@@ -12,9 +21,22 @@ function hasControlCharacter(value) {
   });
 }
 
+function hasDisallowedTextControlCharacter(value) {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return (
+      (codePoint >= 0 && codePoint <= 8) ||
+      codePoint === 11 ||
+      codePoint === 12 ||
+      (codePoint >= 14 && codePoint <= 31) ||
+      codePoint === 127
+    );
+  });
+}
+
 export class ArtifactValidationError extends Error {
   constructor(issues) {
-    super(`ArtifactV1 validation failed:\n- ${issues.join("\n- ")}`);
+    super(`ArtifactV2 validation failed:\n- ${issues.join("\n- ")}`);
     this.name = "ArtifactValidationError";
     this.issues = issues;
   }
@@ -22,8 +44,16 @@ export class ArtifactValidationError extends Error {
 
 export class ContextBindingError extends Error {
   constructor(issues) {
-    super(`ChangeContextV1 binding failed:\n- ${issues.join("\n- ")}`);
+    super(`ChangeContextV2 binding failed:\n- ${issues.join("\n- ")}`);
     this.name = "ContextBindingError";
+    this.issues = issues;
+  }
+}
+
+export class IntentBindingError extends Error {
+  constructor(issues) {
+    super(`IntentV1 binding failed:\n- ${issues.join("\n- ")}`);
+    this.name = "IntentBindingError";
     this.issues = issues;
   }
 }
@@ -75,8 +105,12 @@ function text(value, path, issues) {
     issues.push(`${path} must not be empty or whitespace-only`);
     return false;
   }
-  if (value.length > 4000) {
+  if (Array.from(value).length > 4000) {
     issues.push(`${path} must contain at most 4000 characters`);
+    return false;
+  }
+  if (hasDisallowedTextControlCharacter(value)) {
+    issues.push(`${path} contains a disallowed control character`);
     return false;
   }
   return true;
@@ -91,7 +125,7 @@ function id(value, path, issues) {
 }
 
 export function isSafeRelativePosixPath(value) {
-  if (typeof value !== "string" || value.length === 0 || value.length > 300) {
+  if (typeof value !== "string" || value.length === 0 || Array.from(value).length > 300) {
     return false;
   }
   if (
@@ -163,6 +197,170 @@ function trace(value, path, issues) {
   text(value.outcome, `${path}.outcome`, issues);
 }
 
+function intentItemIds(snapshot) {
+  if (!isRecord(snapshot)) {
+    return [];
+  }
+  return [
+    ...(Array.isArray(snapshot.outcomes) ? snapshot.outcomes : []),
+    ...(Array.isArray(snapshot.constraints) ? snapshot.constraints : []),
+    ...(Array.isArray(snapshot.decisions) ? snapshot.decisions : []),
+    ...(Array.isArray(snapshot.nonGoals) ? snapshot.nonGoals : []),
+    ...(Array.isArray(snapshot.scenarios) ? snapshot.scenarios : []),
+  ]
+    .map((item) => item?.id)
+    .filter((itemId) => typeof itemId === "string");
+}
+
+function validateIntentEnvelope(value, issues) {
+  if (value === null) {
+    return;
+  }
+  if (
+    !record(value, "$.intent", ["fingerprint", "snapshot"], ["fingerprint", "snapshot"], issues)
+  ) {
+    return;
+  }
+  if (typeof value.fingerprint !== "string" || !FINGERPRINT_PATTERN.test(value.fingerprint)) {
+    issues.push("$.intent.fingerprint must be a lowercase SHA-256 digest");
+  }
+  const intentIssues = collectIntentIssues(value.snapshot);
+  issues.push(...intentIssues.map((issue) => `$.intent.snapshot ${issue}`));
+  if (
+    isRecord(value.snapshot) &&
+    typeof value.snapshot.fingerprint === "string" &&
+    value.fingerprint !== value.snapshot.fingerprint
+  ) {
+    issues.push("$.intent.fingerprint must match $.intent.snapshot.fingerprint");
+  }
+  if (isRecord(value.snapshot)) {
+    try {
+      if (calculateIntentFingerprint(value.snapshot) !== value.fingerprint) {
+        issues.push("$.intent.fingerprint does not match the embedded IntentV1 snapshot");
+      }
+    } catch {
+      issues.push("$.intent.snapshot could not be fingerprinted deterministically");
+    }
+  }
+}
+
+function validateAlignment(value, issues) {
+  if (value === null) {
+    return;
+  }
+  if (
+    !record(
+      value,
+      "$.alignment",
+      ["summary", "checks", "deviations"],
+      ["summary", "checks", "deviations"],
+      issues,
+    )
+  ) {
+    return;
+  }
+  text(value.summary, "$.alignment.summary", issues);
+  if (Array.isArray(value.checks)) {
+    value.checks.forEach((check, index) => {
+      const path = `$.alignment.checks[${index}]`;
+      const keys = ["intentItemId", "status", "assessment", "evidencePaths"];
+      if (!record(check, path, keys, keys, issues)) {
+        return;
+      }
+      id(check.intentItemId, `${path}.intentItemId`, issues);
+      if (!["satisfied", "partial", "violated", "not-assessable"].includes(check.status)) {
+        issues.push(`${path}.status must be satisfied, partial, violated, or not-assessable`);
+      }
+      text(check.assessment, `${path}.assessment`, issues);
+      if (array(check.evidencePaths, `${path}.evidencePaths`, 0, 10, issues)) {
+        check.evidencePaths.forEach((entry, evidenceIndex) =>
+          relativePath(entry, `${path}.evidencePaths[${evidenceIndex}]`, issues),
+        );
+      }
+    });
+  } else {
+    issues.push("$.alignment.checks must be an array");
+  }
+
+  if (Array.isArray(value.deviations)) {
+    value.deviations.forEach((deviation, index) => {
+      const path = `$.alignment.deviations[${index}]`;
+      const keys = ["id", "summary", "intentItemIds", "evidencePaths", "reviewStatus"];
+      if (!record(deviation, path, keys, keys, issues)) {
+        return;
+      }
+      id(deviation.id, `${path}.id`, issues);
+      text(deviation.summary, `${path}.summary`, issues);
+      if (Array.isArray(deviation.intentItemIds)) {
+        deviation.intentItemIds.forEach((entry, intentIndex) =>
+          id(entry, `${path}.intentItemIds[${intentIndex}]`, issues),
+        );
+      } else {
+        issues.push(`${path}.intentItemIds must be an array`);
+      }
+      if (array(deviation.evidencePaths, `${path}.evidencePaths`, 1, 10, issues)) {
+        deviation.evidencePaths.forEach((entry, evidenceIndex) =>
+          relativePath(entry, `${path}.evidencePaths[${evidenceIndex}]`, issues),
+        );
+      }
+      if (deviation.reviewStatus !== "needs-user-review") {
+        issues.push(`${path}.reviewStatus must be needs-user-review`);
+      }
+    });
+  } else {
+    issues.push("$.alignment.deviations must be an array");
+  }
+}
+
+function validateKnowledge(value, issues) {
+  if (
+    !record(
+      value,
+      "$.knowledge",
+      ["promotionCandidates"],
+      ["promotionCandidates"],
+      issues,
+    )
+  ) {
+    return;
+  }
+  if (!Array.isArray(value.promotionCandidates)) {
+    issues.push("$.knowledge.promotionCandidates must be an array");
+    return;
+  }
+  value.promotionCandidates.forEach((candidate, index) => {
+    const path = `$.knowledge.promotionCandidates[${index}]`;
+    const keys = ["id", "insight", "rationale", "target", "intentItemIds", "evidencePaths"];
+    if (!record(candidate, path, keys, keys, issues)) {
+      return;
+    }
+    id(candidate.id, `${path}.id`, issues);
+    text(candidate.insight, `${path}.insight`, issues);
+    text(candidate.rationale, `${path}.rationale`, issues);
+    if (
+      !["test", "code-comment", "architecture-doc", "runbook", "change-record"].includes(
+        candidate.target,
+      )
+    ) {
+      issues.push(
+        `${path}.target must be test, code-comment, architecture-doc, runbook, or change-record`,
+      );
+    }
+    if (Array.isArray(candidate.intentItemIds)) {
+      candidate.intentItemIds.forEach((entry, intentIndex) =>
+        id(entry, `${path}.intentItemIds[${intentIndex}]`, issues),
+      );
+    } else {
+      issues.push(`${path}.intentItemIds must be an array`);
+    }
+    if (array(candidate.evidencePaths, `${path}.evidencePaths`, 1, 10, issues)) {
+      candidate.evidencePaths.forEach((entry, evidenceIndex) =>
+        relativePath(entry, `${path}.evidencePaths[${evidenceIndex}]`, issues),
+      );
+    }
+  });
+}
+
 function validateChange(value, issues) {
   if (
     !record(
@@ -183,11 +381,17 @@ function validateChange(value, issues) {
     record(
       value.context,
       "$.change.context",
-      ["fingerprint", "complete", "warnings", "excluded"],
-      ["fingerprint", "complete", "warnings", "excluded"],
+      ["baseCommit", "fingerprint", "complete", "warnings", "excluded"],
+      ["baseCommit", "fingerprint", "complete", "warnings", "excluded"],
       issues,
     )
   ) {
+    if (
+      typeof value.context.baseCommit !== "string" ||
+      !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(value.context.baseCommit)
+    ) {
+      issues.push("$.change.context.baseCommit must be a full lowercase Git commit object ID");
+    }
     if (
       typeof value.context.fingerprint !== "string" ||
       !FINGERPRINT_PATTERN.test(value.context.fingerprint)
@@ -274,10 +478,13 @@ function validateExplanation(value, issues) {
   if (array(value.decisions, "$.explanation.decisions", 1, 20, issues)) {
     value.decisions.forEach((entry, index) => {
       const path = `$.explanation.decisions[${index}]`;
-      const entryKeys = ["decision", "rationale", "tradeoff"];
+      const entryKeys = ["decision", "rationale", "tradeoff", "source"];
       if (record(entry, path, entryKeys, entryKeys, issues)) {
-        for (const key of entryKeys) {
+        for (const key of ["decision", "rationale", "tradeoff"]) {
           text(entry[key], `${path}.${key}`, issues);
+        }
+        if (!["approved-intent", "inferred"].includes(entry.source)) {
+          issues.push(`${path}.source must be approved-intent or inferred`);
         }
       }
     });
@@ -325,6 +532,7 @@ function validateQuiz(value, issues) {
       "options",
       "correctOptionIds",
       "explanation",
+      "intentItemIds",
       "evidencePaths",
     ];
     if (!record(question, path, questionKeys, questionKeys, issues)) {
@@ -347,6 +555,13 @@ function validateQuiz(value, issues) {
       );
     }
     text(question.explanation, `${path}.explanation`, issues);
+    if (Array.isArray(question.intentItemIds)) {
+      question.intentItemIds.forEach((entry, intentIndex) =>
+        id(entry, `${path}.intentItemIds[${intentIndex}]`, issues),
+      );
+    } else {
+      issues.push(`${path}.intentItemIds must be an array`);
+    }
     if (array(question.evidencePaths, `${path}.evidencePaths`, 1, 10, issues)) {
       question.evidencePaths.forEach((entry, evidenceIndex) =>
         relativePath(entry, `${path}.evidencePaths[${evidenceIndex}]`, issues),
@@ -356,13 +571,20 @@ function validateQuiz(value, issues) {
 }
 
 function validateMicroworld(value, issues) {
-  const microworldKeys = ["title", "instructions", "controls", "scenarios"];
+  const microworldKeys = ["title", "instructions", "intentItemIds", "controls", "scenarios"];
   if (!record(value, "$.microworld", microworldKeys, microworldKeys, issues)) {
     return;
   }
 
   text(value.title, "$.microworld.title", issues);
   text(value.instructions, "$.microworld.instructions", issues);
+  if (Array.isArray(value.intentItemIds)) {
+    value.intentItemIds.forEach((entry, intentIndex) =>
+      id(entry, `$.microworld.intentItemIds[${intentIndex}]`, issues),
+    );
+  } else {
+    issues.push("$.microworld.intentItemIds must be an array");
+  }
 
   if (array(value.controls, "$.microworld.controls", 1, 3, issues)) {
     value.controls.forEach((control, index) => {
@@ -429,120 +651,6 @@ function addDuplicateIssues(values, path, label, issues) {
   });
 }
 
-const SECRET_PATTERNS = [
-  {
-    label: "PEM private-key header",
-    pattern: /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/u,
-  },
-  {
-    label: "provider token",
-    pattern:
-      /\b(?:sk-(?:proj-|ant-)?[A-Za-z0-9_-]{20,}|(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{16,}|AIza[A-Za-z0-9_-]{30,}|(?:AKIA|ASIA)[A-Z0-9]{16}|(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,})\b/u,
-  },
-  {
-    label: "Bearer credential",
-    pattern: /\bBearer\s+[A-Za-z0-9._~+/-]{12,}={0,2}\b/iu,
-  },
-  {
-    label: "JWT credential",
-    pattern: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/u,
-  },
-  {
-    label: "URL userinfo credential",
-    pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/iu,
-  },
-];
-
-const SECRET_ASSIGNMENT_PATTERN =
-  /\b(?:password|passwd|secret|client[_-]?secret|api[_-]?key|access[_-]?token|private[_-]?key|secret[_-]?key)\b["']?\s*[:=]\s*(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s,;]+))/giu;
-
-function isSecretPlaceholder(value) {
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized.length === 0 ||
-    /^(?:\[?redacted\]?|<redacted>|placeholder|example|value|changeme|x+|\*+)$/u.test(normalized) ||
-    /^<[^>]+>$|^\$\{[^}]+\}$|^process\.env\.[a-z0-9_]+$/iu.test(normalized) ||
-    /^(?:your|example)[_-]?[a-z0-9_-]+$/u.test(normalized)
-  );
-}
-
-function isEnvironmentOrConfigReference(value) {
-  const normalized = value.trim();
-  return (
-    /^(?:(?:process\.)?env|config|settings|secrets?)\.[a-z0-9_.-]+$/iu.test(normalized) ||
-    /^(?:(?:process\.)?env|config|settings|secrets?)\[(?:"[^"]+"|'[^']+')\]$/iu.test(normalized) ||
-    /^\$[a-z_][a-z0-9_]*$/iu.test(normalized)
-  );
-}
-
-function isSafeUnquotedSecretExpression(value) {
-  const normalized = value.trim();
-  return (
-    /^(?:null|undefined|none|false)$/iu.test(normalized) ||
-    /^[a-z_$][a-z0-9_$.]*\([^\r\n]*\)$/iu.test(normalized)
-  );
-}
-
-function secretLabels(value) {
-  const labels = [];
-  const normalizedEscapes = value.replaceAll('\\"', '"').replaceAll("\\'", "'");
-  for (const { label, pattern } of SECRET_PATTERNS) {
-    if (pattern.test(value) || pattern.test(normalizedEscapes)) {
-      labels.push(label);
-    }
-  }
-
-  SECRET_ASSIGNMENT_PATTERN.lastIndex = 0;
-  let assignment = SECRET_ASSIGNMENT_PATTERN.exec(normalizedEscapes);
-  while (assignment) {
-    const assignedValue = assignment[1] ?? assignment[2] ?? assignment[3] ?? "";
-    const quoted = assignment[1] !== undefined || assignment[2] !== undefined;
-    const safeReference = isEnvironmentOrConfigReference(assignedValue);
-    const safeExpression = !quoted && isSafeUnquotedSecretExpression(assignedValue);
-    if (!isSecretPlaceholder(assignedValue) && !safeReference && !safeExpression) {
-      labels.push("secret assignment");
-      break;
-    }
-    assignment = SECRET_ASSIGNMENT_PATTERN.exec(normalizedEscapes);
-  }
-  return [...new Set(labels)];
-}
-
-function collectSecretIssues(root) {
-  const issues = [];
-  const pending = [{ path: "$", value: root }];
-  const seen = new WeakSet();
-
-  while (pending.length > 0) {
-    const current = pending.pop();
-    if (typeof current.value === "string") {
-      const labels = secretLabels(current.value);
-      if (labels.length > 0) {
-        issues.push(`${current.path} contains suspected ${labels.join(" and ")}`);
-      }
-      continue;
-    }
-    if (current.value === null || typeof current.value !== "object") {
-      continue;
-    }
-    if (seen.has(current.value)) {
-      continue;
-    }
-    seen.add(current.value);
-
-    if (Array.isArray(current.value)) {
-      for (let index = current.value.length - 1; index >= 0; index -= 1) {
-        pending.push({ path: `${current.path}[${index}]`, value: current.value[index] });
-      }
-      continue;
-    }
-    for (const [key, value] of Object.entries(current.value)) {
-      pending.push({ path: location(current.path, key), value });
-    }
-  }
-  return issues;
-}
-
 function enumerateCombinations(controls) {
   let combinations = [[]];
   for (const control of controls) {
@@ -561,11 +669,180 @@ function combinationKey(pairs) {
   return pairs.map(([controlId, optionId]) => `${controlId}=${optionId}`).join("\u0001");
 }
 
+function validateEvidenceReferences(values, path, knownPaths, issues) {
+  if (!Array.isArray(values)) {
+    return;
+  }
+  addDuplicateIssues(values, path, "evidence path", issues);
+  values.forEach((evidencePath, index) => {
+    if (isSafeRelativePosixPath(evidencePath) && !knownPaths.has(evidencePath)) {
+      issues.push(`${path}[${index}] references an unknown file`);
+    }
+  });
+}
+
+function validateIntentReferences(values, path, knownIntentIds, issues) {
+  if (!Array.isArray(values)) {
+    return;
+  }
+  addDuplicateIssues(values, path, "intent item id", issues);
+  values.forEach((intentId, index) => {
+    if (typeof intentId === "string" && !knownIntentIds.has(intentId)) {
+      issues.push(`${path}[${index}] references an unknown intent item`);
+    }
+  });
+}
+
 function validateSemantics(artifact, issues) {
   const files = Array.isArray(artifact.change?.files) ? artifact.change.files : [];
   const filePaths = files.map((file) => file?.path);
   addDuplicateIssues(filePaths, "$.change.files", "path", issues);
   const knownPaths = new Set(filePaths.filter((path) => isSafeRelativePosixPath(path)));
+
+  const intentSnapshot = isRecord(artifact.intent) && isRecord(artifact.intent.snapshot)
+    ? artifact.intent.snapshot
+    : null;
+  const intentIsBound = intentSnapshot !== null;
+  const embeddedIntentIds = intentIsBound ? intentItemIds(intentSnapshot) : [];
+  const knownIntentIds = new Set(embeddedIntentIds);
+  const knownMicroworldIntentIds = new Set(
+    intentIsBound
+      ? [
+          ...(Array.isArray(intentSnapshot.outcomes) ? intentSnapshot.outcomes : []),
+          ...(Array.isArray(intentSnapshot.constraints) ? intentSnapshot.constraints : []),
+        ]
+          .map((item) => item?.id)
+          .filter((itemId) => typeof itemId === "string")
+      : [],
+  );
+  const alignmentChecks = Array.isArray(artifact.alignment?.checks) ? artifact.alignment.checks : [];
+
+  if (artifact.intent === null && artifact.alignment !== null) {
+    issues.push("$.alignment must be null when $.intent is null");
+  }
+  if (artifact.intent !== null && artifact.alignment === null) {
+    issues.push("$.alignment must be present when $.intent is bound");
+  }
+  if (
+    artifact.intent === null &&
+    Array.isArray(artifact.explanation?.decisions) &&
+    artifact.explanation.decisions.some((decision) => decision?.source === "approved-intent")
+  ) {
+    issues.push("$.explanation.decisions cannot use approved-intent when $.intent is null");
+  }
+  if (
+    intentIsBound &&
+    Array.isArray(intentSnapshot.decisions) &&
+    Array.isArray(artifact.explanation?.decisions)
+  ) {
+    const approvedDecisions = new Set(
+      intentSnapshot.decisions.map((decision) =>
+        JSON.stringify([decision.decision, decision.rationale, decision.tradeoff]),
+      ),
+    );
+    artifact.explanation.decisions.forEach((decision, index) => {
+      if (
+        decision?.source === "approved-intent" &&
+        !approvedDecisions.has(
+          JSON.stringify([decision.decision, decision.rationale, decision.tradeoff]),
+        )
+      ) {
+        issues.push(
+          `$.explanation.decisions[${index}] marked approved-intent must exactly match an IntentV1 decision`,
+        );
+      }
+    });
+  }
+
+  if (intentIsBound && artifact.alignment !== null) {
+    const checkedIds = alignmentChecks.map((check) => check?.intentItemId);
+    addDuplicateIssues(checkedIds, "$.alignment.checks", "intent item id", issues);
+    const checkedIdSet = new Set(checkedIds.filter((itemId) => typeof itemId === "string"));
+    for (const itemId of embeddedIntentIds) {
+      if (!checkedIdSet.has(itemId)) {
+        issues.push(`$.alignment.checks is missing intent item "${itemId}"`);
+      }
+    }
+    checkedIds.forEach((itemId, index) => {
+      if (typeof itemId === "string" && !knownIntentIds.has(itemId)) {
+        issues.push(`$.alignment.checks[${index}].intentItemId references an unknown intent item`);
+      }
+    });
+    if (alignmentChecks.length !== embeddedIntentIds.length) {
+      issues.push(
+        `$.alignment.checks must cover exactly ${embeddedIntentIds.length} intent item(s)`,
+      );
+    }
+  }
+
+  alignmentChecks.forEach((check, index) => {
+    if (!isRecord(check)) {
+      return;
+    }
+    const evidencePath = `$.alignment.checks[${index}].evidencePaths`;
+    validateEvidenceReferences(check.evidencePaths, evidencePath, knownPaths, issues);
+    if (
+      check.status !== "not-assessable" &&
+      Array.isArray(check.evidencePaths) &&
+      check.evidencePaths.length === 0
+    ) {
+      issues.push(`${evidencePath} must cite code evidence unless status is not-assessable`);
+    }
+  });
+
+  const deviations = Array.isArray(artifact.alignment?.deviations)
+    ? artifact.alignment.deviations
+    : [];
+  addDuplicateIssues(
+    deviations.map((deviation) => deviation?.id),
+    "$.alignment.deviations",
+    "deviation id",
+    issues,
+  );
+  deviations.forEach((deviation, index) => {
+    if (!isRecord(deviation)) {
+      return;
+    }
+    validateIntentReferences(
+      deviation.intentItemIds,
+      `$.alignment.deviations[${index}].intentItemIds`,
+      knownIntentIds,
+      issues,
+    );
+    validateEvidenceReferences(
+      deviation.evidencePaths,
+      `$.alignment.deviations[${index}].evidencePaths`,
+      knownPaths,
+      issues,
+    );
+  });
+
+  const candidates = Array.isArray(artifact.knowledge?.promotionCandidates)
+    ? artifact.knowledge.promotionCandidates
+    : [];
+  addDuplicateIssues(
+    candidates.map((candidate) => candidate?.id),
+    "$.knowledge.promotionCandidates",
+    "promotion candidate id",
+    issues,
+  );
+  candidates.forEach((candidate, index) => {
+    if (!isRecord(candidate)) {
+      return;
+    }
+    validateIntentReferences(
+      candidate.intentItemIds,
+      `$.knowledge.promotionCandidates[${index}].intentItemIds`,
+      knownIntentIds,
+      issues,
+    );
+    validateEvidenceReferences(
+      candidate.evidencePaths,
+      `$.knowledge.promotionCandidates[${index}].evidencePaths`,
+      knownPaths,
+      issues,
+    );
+  });
 
   const questions = Array.isArray(artifact.quiz?.questions) ? artifact.quiz.questions : [];
   addDuplicateIssues(
@@ -595,6 +872,13 @@ function validateSemantics(artifact, issues) {
       issues.push(`${path}.correctOptionIds must contain exactly one answer for single`);
     }
 
+    validateIntentReferences(
+      question.intentItemIds,
+      `${path}.intentItemIds`,
+      knownIntentIds,
+      issues,
+    );
+
     const evidencePaths = Array.isArray(question.evidencePaths) ? question.evidencePaths : [];
     addDuplicateIssues(evidencePaths, `${path}.evidencePaths`, "evidence path", issues);
     evidencePaths.forEach((evidencePath, evidenceIndex) => {
@@ -603,6 +887,55 @@ function validateSemantics(artifact, issues) {
       }
     });
   });
+
+  if (artifact.intent === null) {
+    questions.forEach((question, questionIndex) => {
+      if (Array.isArray(question?.intentItemIds) && question.intentItemIds.length > 0) {
+        issues.push(
+          `$.quiz.questions[${questionIndex}].intentItemIds must be empty when $.intent is null`,
+        );
+      }
+    });
+  } else if (
+    intentIsBound &&
+    !questions.some(
+      (question) =>
+        Array.isArray(question?.intentItemIds) &&
+        question.intentItemIds.length > 0 &&
+        Array.isArray(question.evidencePaths) &&
+        question.evidencePaths.length > 0,
+    )
+  ) {
+    issues.push(
+      "$.quiz.questions must include at least one evidence-backed question linked to approved intent",
+    );
+  }
+
+  const microworldIntentIds = artifact.microworld?.intentItemIds;
+  validateIntentReferences(
+    microworldIntentIds,
+    "$.microworld.intentItemIds",
+    knownIntentIds,
+    issues,
+  );
+  if (artifact.intent === null) {
+    if (Array.isArray(microworldIntentIds) && microworldIntentIds.length > 0) {
+      issues.push("$.microworld.intentItemIds must be empty when $.intent is null");
+    }
+  } else if (intentIsBound && Array.isArray(microworldIntentIds)) {
+    if (microworldIntentIds.length === 0) {
+      issues.push(
+        "$.microworld.intentItemIds must link at least one approved outcome or constraint",
+      );
+    }
+    microworldIntentIds.forEach((intentId, index) => {
+      if (typeof intentId === "string" && !knownMicroworldIntentIds.has(intentId)) {
+        issues.push(
+          `$.microworld.intentItemIds[${index}] must reference an approved outcome or constraint`,
+        );
+      }
+    });
+  }
 
   const controls = Array.isArray(artifact.microworld?.controls) ? artifact.microworld.controls : [];
   addDuplicateIssues(
@@ -734,19 +1067,32 @@ function validateSemantics(artifact, issues) {
 
 export function collectArtifactIssues(artifact) {
   const issues = [];
-  const rootKeys = ["schemaVersion", "title", "change", "explanation", "quiz", "microworld"];
+  const rootKeys = [
+    "schemaVersion",
+    "title",
+    "intent",
+    "change",
+    "alignment",
+    "explanation",
+    "quiz",
+    "microworld",
+    "knowledge",
+  ];
   if (!record(artifact, "$", rootKeys, rootKeys, issues)) {
     return issues;
   }
 
-  if (artifact.schemaVersion !== 1) {
-    issues.push("$.schemaVersion must equal 1");
+  if (artifact.schemaVersion !== 2) {
+    issues.push("$.schemaVersion must equal 2");
   }
   text(artifact.title, "$.title", issues);
+  validateIntentEnvelope(artifact.intent, issues);
   validateChange(artifact.change, issues);
+  validateAlignment(artifact.alignment, issues);
   validateExplanation(artifact.explanation, issues);
   validateQuiz(artifact.quiz, issues);
   validateMicroworld(artifact.microworld, issues);
+  validateKnowledge(artifact.knowledge, issues);
   validateSemantics(artifact, issues);
   issues.push(...collectSecretIssues(artifact));
   return issues;
@@ -773,10 +1119,194 @@ function nullableContextCount(value, path, issues) {
   }
 }
 
+function validateChangeContextSemantics(context, issues) {
+  const files = Array.isArray(context.files) ? context.files : [];
+  const patches = Array.isArray(context.patches) ? context.patches : [];
+  const excluded = Array.isArray(context.excluded) ? context.excluded : [];
+  const warnings = Array.isArray(context.warnings) ? context.warnings : [];
+  const summary = isRecord(context.summary) ? context.summary : null;
+
+  addDuplicateIssues(
+    patches.map((patch) => patch?.path),
+    "$context.patches",
+    "path",
+    issues,
+  );
+  addDuplicateIssues(
+    excluded.map((entry) => entry?.path),
+    "$context.excluded",
+    "path",
+    issues,
+  );
+
+  const patchesByPath = new Map();
+  for (const patch of patches) {
+    if (!isRecord(patch) || typeof patch.path !== "string") {
+      continue;
+    }
+    const matches = patchesByPath.get(patch.path) ?? [];
+    matches.push(patch);
+    patchesByPath.set(patch.path, matches);
+  }
+  const exclusionsByPath = new Map();
+  for (const entry of excluded) {
+    if (!isRecord(entry) || typeof entry.path !== "string") {
+      continue;
+    }
+    const matches = exclusionsByPath.get(entry.path) ?? [];
+    matches.push(entry);
+    exclusionsByPath.set(entry.path, matches);
+  }
+
+  files.forEach((file, index) => {
+    if (!isRecord(file) || typeof file.path !== "string") {
+      return;
+    }
+    const path = `$context.files[${index}]`;
+    const matchingPatches = patchesByPath.get(file.path) ?? [];
+    const matchingExclusions = exclusionsByPath.get(file.path) ?? [];
+
+    if (file.source === "untracked" && file.status !== "untracked") {
+      issues.push(`${path}.status must be untracked when source is untracked`);
+    }
+    if (file.source === "tracked" && file.status === "untracked") {
+      issues.push(`${path}.status cannot be untracked when source is tracked`);
+    }
+
+    if (file.bodyIncluded === true) {
+      if (matchingPatches.length !== 1) {
+        issues.push(`${path}.bodyIncluded requires exactly one matching patch`);
+      }
+      if (own(file, "omissionReason")) {
+        issues.push(`${path}.omissionReason is not allowed when bodyIncluded is true`);
+      }
+      if (matchingExclusions.length > 0) {
+        issues.push(`${path} cannot be included and excluded at the same time`);
+      }
+      const patch = matchingPatches[0];
+      if (isRecord(patch)) {
+        const expectedKind = file.source === "untracked" ? "untracked" : "diff";
+        if (patch.kind !== expectedKind) {
+          issues.push(`${path} source requires matching patch kind ${expectedKind}`);
+        }
+      }
+    } else if (file.bodyIncluded === false) {
+      if (matchingPatches.length > 0) {
+        issues.push(`${path}.bodyIncluded is false but a matching patch exists`);
+      }
+      if (!own(file, "omissionReason")) {
+        issues.push(`${path}.omissionReason is required when bodyIncluded is false`);
+      }
+      if (
+        matchingExclusions.length !== 1 ||
+        matchingExclusions[0]?.reason !== file.omissionReason
+      ) {
+        issues.push(`${path} omissionReason must exactly match one excluded entry`);
+      }
+    }
+  });
+
+  excluded.forEach((entry, index) => {
+    if (!isRecord(entry) || typeof entry.path !== "string") {
+      return;
+    }
+    const path = `$context.excluded[${index}]`;
+    if (entry.path === "additional-files-not-enumerated") {
+      if (!/^file-count-limit:[1-9][0-9]*$/u.test(entry.reason)) {
+        issues.push(`${path}.reason must record the positive file-count-limit omission`);
+      }
+      return;
+    }
+    const file = files.find((candidate) => candidate?.path === entry.path);
+    if (
+      !isRecord(file) ||
+      file.bodyIncluded !== false ||
+      file.omissionReason !== entry.reason
+    ) {
+      issues.push(`${path} must exactly describe one omitted file body`);
+    }
+  });
+
+  if (summary !== null) {
+    const includedFiles = files.filter((file) => file?.bodyIncluded === true);
+    const omittedFiles = files.filter((file) => file?.bodyIncluded === false);
+    const additions = files.reduce(
+      (total, file) => total + (Number.isInteger(file?.additions) ? file.additions : 0),
+      0,
+    );
+    const deletions = files.reduce(
+      (total, file) => total + (Number.isInteger(file?.deletions) ? file.deletions : 0),
+      0,
+    );
+    const changedLines = includedFiles.reduce(
+      (total, file) =>
+        total +
+        (Number.isInteger(file?.additions) ? file.additions : 0) +
+        (Number.isInteger(file?.deletions) ? file.deletions : 0),
+      0,
+    );
+    const contextBytes = patches.reduce(
+      (total, patch) =>
+        total + (typeof patch?.text === "string" ? Buffer.byteLength(patch.text, "utf8") : 0),
+      0,
+    );
+    const expected = {
+      representedFiles: files.length,
+      includedBodies: includedFiles.length,
+      omittedBodies: omittedFiles.length,
+      additions,
+      deletions,
+      changedLines,
+      contextBytes,
+    };
+    for (const [key, value] of Object.entries(expected)) {
+      if (summary[key] !== value) {
+        issues.push(`$context.summary.${key} must equal ${value} from the collected entries`);
+      }
+    }
+    if (Number.isInteger(summary.discoveredFiles) && summary.discoveredFiles < files.length) {
+      issues.push("$context.summary.discoveredFiles cannot be less than representedFiles");
+    }
+    const unrepresented = Number.isInteger(summary.discoveredFiles)
+      ? summary.discoveredFiles - files.length
+      : 0;
+    const fileLimitEntries = excluded.filter(
+      (entry) => entry?.path === "additional-files-not-enumerated",
+    );
+    if (unrepresented > 0) {
+      if (
+        fileLimitEntries.length !== 1 ||
+        fileLimitEntries[0]?.reason !== `file-count-limit:${unrepresented}`
+      ) {
+        issues.push(
+          "$context.excluded must exactly record files omitted by the file-count limit",
+        );
+      }
+    } else if (fileLimitEntries.length > 0) {
+      issues.push(
+        "$context.excluded cannot contain additional-files-not-enumerated without undisplayed files",
+      );
+    }
+    if (patches.length !== includedFiles.length) {
+      issues.push("$context.patches must have one entry for every included body");
+    }
+  }
+
+  if (
+    context.complete === true &&
+    (files.some((file) => file?.bodyIncluded === false) ||
+      excluded.length > 0 ||
+      warnings.length > 0)
+  ) {
+    issues.push("$context.complete cannot be true with omissions, exclusions, or warnings");
+  }
+}
+
 export function collectChangeContextIssues(context) {
   const issues = [];
   const rootKeys = [
     "schemaVersion",
+    "baseCommit",
     "scope",
     "complete",
     "summary",
@@ -790,8 +1320,14 @@ export function collectChangeContextIssues(context) {
     return issues;
   }
 
-  if (context.schemaVersion !== 1) {
-    issues.push("$context.schemaVersion must equal 1");
+  if (context.schemaVersion !== 2) {
+    issues.push("$context.schemaVersion must equal 2");
+  }
+  if (
+    typeof context.baseCommit !== "string" ||
+    !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(context.baseCommit)
+  ) {
+    issues.push("$context.baseCommit must be a full lowercase Git commit object ID");
   }
   if (
     record(
@@ -809,7 +1345,7 @@ export function collectChangeContextIssues(context) {
       context.scope.comparison !==
       "HEAD -> working tree (staged + unstaged + safe untracked)"
     ) {
-      issues.push("$context.scope.comparison must match the DiffScope working-tree comparison");
+      issues.push("$context.scope.comparison must match the Hope working-tree comparison");
     }
     if (context.scope.includeUntrackedBodies !== true) {
       issues.push("$context.scope.includeUntrackedBodies must be true");
@@ -877,7 +1413,7 @@ export function collectChangeContextIssues(context) {
       if (!["diff", "untracked"].includes(patch.kind)) {
         issues.push(`${path}.kind must be diff or untracked`);
       }
-      if (typeof patch.text !== "string" || patch.text.length > 262144) {
+      if (typeof patch.text !== "string" || Array.from(patch.text).length > 262144) {
         issues.push(`${path}.text must be a string of at most 262144 characters`);
       }
     });
@@ -900,13 +1436,22 @@ export function collectChangeContextIssues(context) {
   }
   if (typeof context.fingerprint !== "string" || !FINGERPRINT_PATTERN.test(context.fingerprint)) {
     issues.push("$context.fingerprint must be a lowercase SHA-256 digest");
+  } else {
+    try {
+      if (calculateChangeContextFingerprint(context) !== context.fingerprint) {
+        issues.push("$context.fingerprint does not match the context contents");
+      }
+    } catch {
+      issues.push("$context could not be fingerprinted deterministically");
+    }
   }
+  validateChangeContextSemantics(context, issues);
   return issues;
 }
 
 export function calculateChangeContextFingerprint(context) {
   if (!isRecord(context)) {
-    throw new TypeError("ChangeContextV1 must be an object");
+    throw new TypeError("ChangeContextV2 must be an object");
   }
   const withoutFingerprint = {};
   for (const [key, value] of Object.entries(context)) {
@@ -914,7 +1459,10 @@ export function calculateChangeContextFingerprint(context) {
       withoutFingerprint[key] = value;
     }
   }
-  return createHash("sha256").update(JSON.stringify(withoutFingerprint)).digest("hex");
+  return createHash("sha256")
+    .update(CHANGE_CONTEXT_FINGERPRINT_DOMAIN, "utf8")
+    .update(canonicalizeJson(withoutFingerprint), "utf8")
+    .digest("hex");
 }
 
 function equalStringArrays(left, right) {
@@ -947,19 +1495,28 @@ export function validateArtifactAgainstContext(artifact, context) {
     issues.push("$context.fingerprint does not match the context contents");
   }
   if (artifact.change.context.fingerprint !== context.fingerprint) {
-    issues.push("$.change.context.fingerprint does not match ChangeContextV1");
+    issues.push("$.change.context.fingerprint does not match ChangeContextV2");
+  }
+  if (artifact.change.context.baseCommit !== context.baseCommit) {
+    issues.push("$.change.context.baseCommit does not match ChangeContextV2");
+  }
+  if (
+    artifact.intent !== null &&
+    artifact.intent.snapshot.baseline.head !== context.baseCommit
+  ) {
+    issues.push("$.intent.snapshot.baseline.head does not match ChangeContextV2 baseCommit");
   }
   if (artifact.change.comparison !== context.scope.comparison) {
-    issues.push("$.change.comparison does not match ChangeContextV1 scope");
+    issues.push("$.change.comparison does not match ChangeContextV2 scope");
   }
   if (artifact.change.context.complete !== context.complete) {
-    issues.push("$.change.context.complete does not match ChangeContextV1");
+    issues.push("$.change.context.complete does not match ChangeContextV2");
   }
   if (!equalStringArrays(artifact.change.context.warnings, context.warnings)) {
-    issues.push("$.change.context.warnings do not exactly match ChangeContextV1");
+    issues.push("$.change.context.warnings do not exactly match ChangeContextV2");
   }
   if (!equalExclusionArrays(artifact.change.context.excluded, context.excluded)) {
-    issues.push("$.change.context.excluded does not exactly match ChangeContextV1");
+    issues.push("$.change.context.excluded does not exactly match ChangeContextV2");
   }
 
   const expectedPaths = new Set(
@@ -969,14 +1526,57 @@ export function validateArtifactAgainstContext(artifact, context) {
   const inventedPaths = [...artifactPaths].filter((path) => !expectedPaths.has(path));
   const omittedPaths = [...expectedPaths].filter((path) => !artifactPaths.has(path));
   if (inventedPaths.length > 0) {
-    issues.push("$.change.files includes path(s) without included ChangeContextV1 bodies");
+    issues.push("$.change.files includes path(s) without included ChangeContextV2 bodies");
   }
   if (omittedPaths.length > 0) {
-    issues.push("$.change.files omits path(s) with included ChangeContextV1 bodies");
+    issues.push("$.change.files omits path(s) with included ChangeContextV2 bodies");
   }
 
   if (issues.length > 0) {
     throw new ContextBindingError(issues);
+  }
+  return artifact;
+}
+
+export function validateArtifactAgainstIntent(artifact, intent) {
+  validateArtifact(artifact);
+  const issues = [];
+
+  if (intent === undefined) {
+    if (artifact.intent !== null) {
+      issues.push("--intent is required when ArtifactV2 embeds an IntentV1 snapshot");
+    }
+  } else {
+    const externalIssues = collectIntentIssues(intent);
+    issues.push(...externalIssues.map((issue) => `$intent ${issue}`));
+
+    if (artifact.intent === null) {
+      issues.push("$.intent must embed the IntentV1 supplied with --intent");
+    } else if (externalIssues.length === 0) {
+      let externalFingerprint;
+      try {
+        externalFingerprint = calculateIntentFingerprint(intent);
+      } catch {
+        issues.push("$intent could not be fingerprinted deterministically");
+      }
+      if (externalFingerprint !== intent.fingerprint) {
+        issues.push("$intent.fingerprint does not match the IntentV1 contents");
+      }
+      if (artifact.intent.fingerprint !== intent.fingerprint) {
+        issues.push("$.intent.fingerprint does not match the supplied IntentV1");
+      }
+      try {
+        if (canonicalizeJson(artifact.intent.snapshot) !== canonicalizeJson(intent)) {
+          issues.push("$.intent.snapshot does not exactly match the supplied IntentV1");
+        }
+      } catch {
+        issues.push("IntentV1 snapshots could not be compared deterministically");
+      }
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new IntentBindingError(issues);
   }
   return artifact;
 }

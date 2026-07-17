@@ -1,10 +1,58 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "title": "요청 식별자 검증 변경 이해",
+  "intent": {
+    "fingerprint": "3146e7446f76da798c96749bcf11f1728164cefc1267fdd5a8d3d5a984555b65",
+    "snapshot": {
+      "schemaVersion": 1,
+      "baseline": {
+        "head": "1111111111111111111111111111111111111111",
+        "workingTree": "clean"
+      },
+      "goal": "잘못된 요청을 저장소 접근 전에 일관된 400 응답으로 종료한다.",
+      "outcomes": [
+        {
+          "id": "reject-invalid-request",
+          "statement": "식별자가 없는 요청은 저장소 조회 없이 400 응답을 받는다."
+        }
+      ],
+      "constraints": [
+        {
+          "id": "preserve-existing-contract",
+          "statement": "유효한 요청의 200 및 404 응답 계약을 유지한다.",
+          "rationale": "기존 클라이언트의 동작을 깨뜨리지 않아야 한다."
+        }
+      ],
+      "decisions": [
+        {
+          "id": "validate-at-router",
+          "decision": "요청 식별자를 라우터에서 검증한다.",
+          "rationale": "잘못된 입력을 가장 가까운 경계에서 종료할 수 있다.",
+          "tradeoff": "다른 진입점도 같은 검증 규칙을 공유해야 한다."
+        }
+      ],
+      "nonGoals": [
+        {
+          "id": "redesign-id-format",
+          "statement": "식별자 형식 전체를 재설계하지 않는다."
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "missing-id",
+          "given": "요청 식별자가 없다.",
+          "when": "라우터가 요청을 처리한다.",
+          "then": "저장소를 조회하지 않고 400 오류를 반환한다."
+        }
+      ],
+      "fingerprint": "3146e7446f76da798c96749bcf11f1728164cefc1267fdd5a8d3d5a984555b65"
+    }
+  },
   "change": {
     "summary": "라우터가 서비스 호출 전에 요청 식별자를 검증하도록 변경했다.",
     "comparison": "HEAD -> working tree (staged + unstaged + safe untracked)",
     "context": {
+      "baseCommit": "1111111111111111111111111111111111111111",
       "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "complete": true,
       "warnings": [],
@@ -18,6 +66,50 @@
       {
         "path": "test/routing.test.mjs",
         "responsibility": "유효한 식별자와 누락된 식별자의 동작을 검증한다."
+      }
+    ]
+  },
+  "alignment": {
+    "summary": "승인된 입력 경계 의도는 구현됐고, 공백 문자열 처리 규칙은 사용자 검토가 필요하다.",
+    "checks": [
+      {
+        "intentItemId": "reject-invalid-request",
+        "status": "satisfied",
+        "assessment": "누락된 식별자는 서비스 호출 전에 400으로 종료된다.",
+        "evidencePaths": ["src/routing.mjs", "test/routing.test.mjs"]
+      },
+      {
+        "intentItemId": "preserve-existing-contract",
+        "status": "satisfied",
+        "assessment": "유효한 식별자의 성공 및 404 테스트가 유지된다.",
+        "evidencePaths": ["test/routing.test.mjs"]
+      },
+      {
+        "intentItemId": "validate-at-router",
+        "status": "satisfied",
+        "assessment": "검증 분기가 라우터의 서비스 호출 앞에 배치됐다.",
+        "evidencePaths": ["src/routing.mjs"]
+      },
+      {
+        "intentItemId": "redesign-id-format",
+        "status": "satisfied",
+        "assessment": "식별자 형식 자체를 바꾸는 코드는 포함되지 않았다.",
+        "evidencePaths": ["src/routing.mjs"]
+      },
+      {
+        "intentItemId": "missing-id",
+        "status": "satisfied",
+        "assessment": "누락 요청이 저장소를 건드리지 않는 시나리오가 테스트된다.",
+        "evidencePaths": ["test/routing.test.mjs"]
+      }
+    ],
+    "deviations": [
+      {
+        "id": "whitespace-rule",
+        "summary": "공백 문자열을 누락으로 취급하는 규칙은 승인된 의도에 명시되지 않았다.",
+        "intentItemIds": ["reject-invalid-request"],
+        "evidencePaths": ["src/routing.mjs"],
+        "reviewStatus": "needs-user-review"
       }
     ]
   },
@@ -58,9 +150,10 @@
     ],
     "decisions": [
       {
-        "decision": "라우터에서 식별자를 검증한다.",
-        "rationale": "요청 형식 오류를 가장 가까운 입력 경계에서 처리할 수 있다.",
-        "tradeoff": "다른 진입점이 생기면 같은 검증 규칙을 공유해야 한다."
+        "decision": "요청 식별자를 라우터에서 검증한다.",
+        "rationale": "잘못된 입력을 가장 가까운 경계에서 종료할 수 있다.",
+        "tradeoff": "다른 진입점도 같은 검증 규칙을 공유해야 한다.",
+        "source": "approved-intent"
       }
     ],
     "nonGoals": ["식별자 형식 전체를 재설계하지 않는다.", "저장소 조회 전략을 변경하지 않는다."],
@@ -90,6 +183,7 @@
         ],
         "correctOptionIds": ["router"],
         "explanation": "요청 형식 오류는 라우터에서 서비스 호출 전에 종료된다.",
+        "intentItemIds": ["reject-invalid-request"],
         "evidencePaths": ["src/routing.mjs"]
       },
       {
@@ -103,6 +197,7 @@
         ],
         "correctOptionIds": ["success-shape", "not-found"],
         "explanation": "유효한 요청의 200 및 404 계약은 유지되고, 누락 요청의 조회는 제거된다.",
+        "intentItemIds": ["preserve-existing-contract"],
         "evidencePaths": ["src/routing.mjs", "test/routing.test.mjs"]
       },
       {
@@ -116,6 +211,7 @@
         ],
         "correctOptionIds": ["bad-request"],
         "explanation": "입력 검증이 조회보다 먼저 실행되므로 저장소 상태는 결과에 영향을 주지 않는다.",
+        "intentItemIds": ["reject-invalid-request", "missing-id"],
         "evidencePaths": ["src/routing.mjs", "test/routing.test.mjs"]
       }
     ]
@@ -123,6 +219,7 @@
   "microworld": {
     "title": "입력과 저장소 상태에 따른 요청 흐름",
     "instructions": "요청 식별자와 저장소 상태를 바꾸며 변경 전후의 실행 경로를 비교하세요.",
+    "intentItemIds": ["reject-invalid-request", "preserve-existing-contract"],
     "controls": [
       {
         "id": "request-id",
@@ -232,6 +329,18 @@
           "outcome": "400 응답"
         },
         "lesson": "입력 경계의 검증이 내부 상태에 따른 불확실성을 제거한다."
+      }
+    ]
+  },
+  "knowledge": {
+    "promotionCandidates": [
+      {
+        "id": "input-boundary-contract",
+        "insight": "누락된 식별자는 저장소 조회를 만들지 않아야 한다.",
+        "rationale": "설명 문서보다 회귀 테스트가 이 불변 조건을 더 오래 지킨다.",
+        "target": "test",
+        "intentItemIds": ["preserve-existing-contract", "missing-id"],
+        "evidencePaths": ["test/routing.test.mjs"]
       }
     ]
   }

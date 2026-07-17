@@ -1,11 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/dkstm95/diff-scope/main/plugins/diff-scope/skills/diff/references/change-context-v1.schema.json",
-  "title": "Change Understanding ChangeContextV1",
+  "$id": "https://raw.githubusercontent.com/dkstm95/hope/main/plugins/hope/skills/diff/references/change-context-v2.schema.json",
+  "title": "Hope ChangeContextV2",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schemaVersion",
+    "baseCommit",
     "scope",
     "complete",
     "summary",
@@ -16,7 +17,11 @@
     "fingerprint"
   ],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
+    "baseCommit": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
     "scope": {
       "type": "object",
       "additionalProperties": false,
@@ -111,12 +116,17 @@
     "nullableCount": {
       "anyOf": [{ "$ref": "#/$defs/count" }, { "type": "null" }]
     },
-    "nonEmptyText": { "type": "string", "minLength": 1, "maxLength": 4000 },
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]+$"
+    },
     "relativePath": {
       "type": "string",
       "minLength": 1,
       "maxLength": 300,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^\\u0000]+$"
+      "pattern": "^(?![~/])(?![A-Za-z]:)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!.*\\\\)(?!.*//)(?!\\s)(?!.*\\s$)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*[\\u0000-\\u001F\\u007F]).+$"
     }
   }
 }

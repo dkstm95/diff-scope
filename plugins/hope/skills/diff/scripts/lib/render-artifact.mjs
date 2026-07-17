@@ -7,6 +7,7 @@ import {
   ContextBindingError,
   validateArtifact,
   validateArtifactAgainstContext,
+  validateArtifactAgainstIntent,
 } from "./validate-artifact.mjs";
 
 const BROWSER_STYLE = String.raw`:root {
@@ -195,22 +196,115 @@ function addHeading(parent, level, text) {
   return heading;
 }
 
+function appendEvidence(parent, paths) {
+  if (paths.length === 0) return;
+  const evidence = element("p", "Evidence: ", "muted");
+  paths.forEach(function (path, index) {
+    if (index > 0) evidence.append(document.createTextNode(", "));
+    evidence.append(element("code", path));
+  });
+  parent.append(evidence);
+}
+
+function appendIntentLinks(parent, intentItemIds) {
+  if (intentItemIds.length === 0) return;
+  const links = element("p", "Linked approved intent: ", "muted");
+  intentItemIds.forEach(function (intentItemId, index) {
+    if (index > 0) links.append(document.createTextNode(", "));
+    links.append(element("code", intentItemId));
+  });
+  parent.append(links);
+}
+
+function intentItemLabel(item) {
+  if (item.statement) return item.statement;
+  if (item.decision) return item.decision;
+  return "Given " + item.given + " · When " + item.when + " · Then " + item.then;
+}
+
+function renderIntentAlignment() {
+  const status = document.getElementById("intent-status");
+  if (artifact.intent === null) {
+    status.textContent =
+      "No approved intent is linked. This understanding bundle was generated from the code change alone.";
+    status.className = "muted";
+    return;
+  }
+
+  const snapshot = artifact.intent.snapshot;
+  status.append(element("strong", "Approved intent: "));
+  status.append(document.createTextNode(snapshot.goal));
+  const fingerprint = document.getElementById("intent-fingerprint");
+  fingerprint.hidden = false;
+  fingerprint.append(document.createTextNode("Intent fingerprint: "));
+  fingerprint.append(element("code", artifact.intent.fingerprint));
+
+  const items = []
+    .concat(snapshot.outcomes, snapshot.constraints, snapshot.decisions, snapshot.nonGoals, snapshot.scenarios);
+  const itemsById = new Map(items.map(function (item) { return [item.id, item]; }));
+  const alignmentSummary = document.getElementById("alignment-summary");
+  alignmentSummary.textContent = artifact.alignment.summary;
+
+  const checks = document.getElementById("alignment-checks");
+  for (const check of artifact.alignment.checks) {
+    const item = element("li");
+    item.append(element("span", check.status, "tag"));
+    const intentItem = itemsById.get(check.intentItemId);
+    item.append(element("strong", check.intentItemId + ": "));
+    item.append(document.createTextNode(intentItemLabel(intentItem) + " — " + check.assessment));
+    appendEvidence(item, check.evidencePaths);
+    checks.append(item);
+  }
+
+  const deviationBlock = document.getElementById("deviation-block");
+  if (artifact.alignment.deviations.length > 0) {
+    deviationBlock.hidden = false;
+    const deviations = document.getElementById("deviation-list");
+    for (const deviation of artifact.alignment.deviations) {
+      const item = element("li");
+      item.append(element("span", "Needs user review", "tag"));
+      item.append(document.createTextNode(deviation.summary));
+      appendEvidence(item, deviation.evidencePaths);
+      deviations.append(item);
+    }
+  }
+}
+
+function renderKnowledge() {
+  const candidates = artifact.knowledge.promotionCandidates;
+  const empty = document.getElementById("knowledge-empty");
+  if (candidates.length === 0) {
+    empty.hidden = false;
+    return;
+  }
+  const list = document.getElementById("knowledge-list");
+  for (const candidate of candidates) {
+    const item = element("li");
+    item.append(element("span", candidate.target, "tag"));
+    item.append(element("strong", candidate.insight + ": "));
+    item.append(document.createTextNode(candidate.rationale));
+    appendEvidence(item, candidate.evidencePaths);
+    list.append(item);
+  }
+}
+
 function renderExplanation() {
   document.getElementById("artifact-title").textContent = artifact.title;
   document.getElementById("artifact-summary").textContent = artifact.change.summary;
   document.getElementById("comparison").textContent = artifact.change.comparison;
+  document.getElementById("base-commit").textContent = artifact.change.context.baseCommit;
   document.getElementById("goal").textContent = artifact.explanation.goal;
 
   const context = document.getElementById("context-status");
   if (!artifact.change.context.complete) {
     context.className = "notice";
     context.setAttribute("role", "note");
-    context.append(element("strong", "컨텍스트가 완전하지 않습니다. "));
+    context.append(element("strong", "Context is incomplete. "));
     context.append(
       document.createTextNode(
         artifact.change.context.warnings.length > 0
           ? artifact.change.context.warnings.join(" · ")
-          : "수집 범위를 확인하세요.",
+          : "Review the collected scope.",
       ),
     );
   } else if (artifact.change.context.warnings.length > 0) {
@@ -218,7 +312,7 @@ function renderExplanation() {
     context.setAttribute("role", "note");
     context.textContent = artifact.change.context.warnings.join(" · ");
   } else {
-    context.textContent = "수집기가 이 변경 범위를 완전한 것으로 표시했습니다.";
+    context.textContent = "The collector marked this change scope as complete.";
     context.className = "muted";
   }
 
@@ -252,9 +346,9 @@ function renderExplanation() {
   for (const entry of artifact.explanation.beforeAfter) {
     const card = element("article", undefined, "card");
     addHeading(card, 4, entry.area);
-    card.append(element("p", "이전: " + entry.before));
-    card.append(element("p", "이후: " + entry.after));
-    card.append(element("p", "이유: " + entry.why, "muted"));
+    card.append(element("p", "Before: " + entry.before));
+    card.append(element("p", "After: " + entry.after));
+    card.append(element("p", "Why: " + entry.why, "muted"));
     beforeAfter.append(card);
   }
 
@@ -274,8 +368,11 @@ function renderExplanation() {
   const decisions = document.getElementById("decision-list");
   for (const entry of artifact.explanation.decisions) {
     const item = element("li");
+    item.append(
+      element("span", entry.source === "approved-intent" ? "Approved intent" : "Inferred", "tag"),
+    );
     item.append(element("strong", entry.decision + ": "));
-    item.append(document.createTextNode(entry.rationale + " (절충: " + entry.tradeoff + ")"));
+    item.append(document.createTextNode(entry.rationale + " (Trade-off: " + entry.tradeoff + ")"));
     decisions.append(item);
   }
 
@@ -296,6 +393,7 @@ function renderQuiz() {
   artifact.quiz.questions.forEach(function (question, questionIndex) {
     const fieldset = element("fieldset");
     fieldset.append(element("legend", String(questionIndex + 1) + ". " + question.prompt));
+    appendIntentLinks(fieldset, question.intentItemIds);
     const inputs = [];
 
     for (const option of question.options) {
@@ -318,7 +416,7 @@ function renderQuiz() {
     answerViews.push({ question: question, inputs: inputs, feedback: feedback });
   });
 
-  const button = element("button", "채점하고 해설 보기");
+  const button = element("button", "Check answers and show explanations");
   button.type = "submit";
   form.append(button);
 
@@ -338,7 +436,7 @@ function renderQuiz() {
       view.feedback.hidden = false;
       view.feedback.className = "answer " + (correct ? "correct" : "incorrect");
       view.feedback.textContent =
-        (correct ? "정답입니다. " : "다시 확인하세요. ") + view.question.explanation;
+        (correct ? "Correct. " : "Review this answer. ") + view.question.explanation;
     }
 
     const percent = Math.round((correctCount / answerViews.length) * 100);
@@ -346,9 +444,9 @@ function renderQuiz() {
     const result = document.getElementById("quiz-result");
     result.className = "result " + (passed ? "correct" : "incorrect");
     result.textContent =
-      String(correctCount) + "/" + String(answerViews.length) + " 정답 · " +
-      String(percent) + "% · " + (passed ? "기준 통과" : "기준 미달") +
-      " (통과 기준 " + String(artifact.quiz.passPercent) + "%)";
+      String(correctCount) + "/" + String(answerViews.length) + " correct · " +
+      String(percent) + "% · " + (passed ? "Pass" : "Below threshold") +
+      " (pass threshold " + String(artifact.quiz.passPercent) + "%)";
     result.focus();
   });
 }
@@ -363,13 +461,17 @@ function renderTrace(parent, label, trace) {
     item.append(document.createTextNode(step.behavior));
     steps.append(item);
   }
-  panel.append(steps, element("p", "결과: " + trace.outcome, "outcome"));
+  panel.append(steps, element("p", "Outcome: " + trace.outcome, "outcome"));
   parent.append(panel);
 }
 
 function renderMicroworld() {
   document.getElementById("microworld-title").textContent = artifact.microworld.title;
   document.getElementById("microworld-instructions").textContent = artifact.microworld.instructions;
+  appendIntentLinks(
+    document.getElementById("microworld-intent-links"),
+    artifact.microworld.intentItemIds,
+  );
   const controls = document.getElementById("microworld-controls");
   const selections = new Map();
 
@@ -384,14 +486,14 @@ function renderMicroworld() {
     const view = document.getElementById("scenario-view");
     view.textContent = "";
     if (!scenario) {
-      view.append(element("p", "해당 조합의 시나리오를 찾지 못했습니다.", "notice"));
+      view.append(element("p", "No scenario matches this combination.", "notice"));
       return;
     }
 
     addHeading(view, 3, scenario.title);
     const comparison = element("div", undefined, "grid two");
-    renderTrace(comparison, "변경 전", scenario.before);
-    renderTrace(comparison, "변경 후", scenario.after);
+    renderTrace(comparison, "Before change", scenario.before);
+    renderTrace(comparison, "After change", scenario.after);
     view.append(comparison, element("p", scenario.lesson, "lesson"));
   }
 
@@ -419,7 +521,9 @@ function renderMicroworld() {
   updateScenario();
 }
 
+renderIntentAlignment();
 renderExplanation();
+renderKnowledge();
 renderQuiz();
 renderMicroworld();`;
 
@@ -444,24 +548,28 @@ function markdownBeforeAfter(entries) {
     .map(
       (entry) =>
         `### ${markdownText(entry.area)}\n\n` +
-        `${bullet(`이전: ${entry.before}`)}\n` +
-        `${bullet(`이후: ${entry.after}`)}\n` +
-        `${bullet(`이유: ${entry.why}`)}`,
+        `${bullet(`Before: ${entry.before}`)}\n` +
+        `${bullet(`After: ${entry.after}`)}\n` +
+        `${bullet(`Why: ${entry.why}`)}`,
     )
     .join("\n\n");
+}
+
+function markdownEvidence(paths) {
+  return paths.length === 0 ? "No evidence" : `Evidence: ${paths.map(markdownText).join(", ")}`;
 }
 
 export function renderExplanationMarkdown(artifact) {
   validateArtifact(artifact);
 
-  const contextStatus = artifact.change.context.complete ? "완전" : "불완전";
+  const contextStatus = artifact.change.context.complete ? "Complete" : "Incomplete";
   const warnings =
     artifact.change.context.warnings.length > 0
       ? bullets(artifact.change.context.warnings)
-      : "- 없음";
+      : "- None";
   const exclusionsSection =
     artifact.change.context.excluded.length > 0
-      ? `### 제외된 컨텍스트\n\n${artifact.change.context.excluded
+      ? `### Excluded context\n\n${artifact.change.context.excluded
           .map((entry) => bullet(`${entry.path} — ${entry.reason}`))
           .join("\n")}\n`
       : "";
@@ -472,66 +580,130 @@ export function renderExplanationMarkdown(artifact) {
     .map((entry) => bullet(`${entry.step}. ${entry.component}: ${entry.behavior}`))
     .join("\n");
   const decisions = artifact.explanation.decisions
-    .map((entry) => bullet(`${entry.decision} — ${entry.rationale} (절충: ${entry.tradeoff})`))
+    .map((entry) =>
+      bullet(
+        `[${entry.source}] ${entry.decision} — ${entry.rationale} (Trade-off: ${entry.tradeoff})`,
+      ),
+    )
     .join("\n");
   const verification = artifact.explanation.verification
     .map((entry) => bullet(`[${entry.status}] ${entry.command} — ${entry.result}`))
     .join("\n");
+  const alignmentSection =
+    artifact.intent === null
+      ? `## Intent alignment\n\nNo approved intent is linked. This understanding bundle was generated from the code change alone.\n`
+      : `## Intent alignment\n\n` +
+        `${markdownText(artifact.intent.snapshot.goal)}\n\n` +
+        `- Intent fingerprint: ${markdownText(artifact.intent.fingerprint)}\n\n` +
+        `### Alignment summary\n\n${markdownText(artifact.alignment.summary)}\n\n` +
+        `### Intent item checks\n\n${artifact.alignment.checks
+          .map((check) =>
+            bullet(
+              `[${check.status}] ${check.intentItemId} — ${check.assessment} (${markdownEvidence(check.evidencePaths)})`,
+            ),
+          )
+          .join("\n")}\n\n` +
+        `### Intent deviations\n\n${
+          artifact.alignment.deviations.length === 0
+            ? "- None"
+            : artifact.alignment.deviations
+                .map((deviation) =>
+                  bullet(
+                    `[needs-user-review] ${deviation.summary} (${markdownEvidence(deviation.evidencePaths)})`,
+                  ),
+                )
+                .join("\n")
+        }\n`;
+  const knowledgeCandidates =
+    artifact.knowledge.promotionCandidates.length === 0
+      ? "- None"
+      : artifact.knowledge.promotionCandidates
+          .map((candidate) =>
+            bullet(
+              `[${candidate.target}] ${candidate.insight} — ${candidate.rationale} (${markdownEvidence(candidate.evidencePaths)})`,
+            ),
+          )
+          .join("\n");
+  const quizIntentLinks = artifact.quiz.questions
+    .filter((question) => question.intentItemIds.length > 0)
+    .map((question) =>
+      bullet(`Quiz ${question.id}: ${question.intentItemIds.join(", ")}`),
+    )
+    .join("\n");
+  const microworldIntentLinks =
+    artifact.microworld.intentItemIds.length > 0
+      ? artifact.microworld.intentItemIds.map(markdownText).join(", ")
+      : "None (standalone change understanding)";
 
   return `# ${markdownText(artifact.title)}
 
-## 변경 요약
+${alignmentSection}
+
+## Change summary
 
 ${markdownText(artifact.change.summary)}
 
-- 비교 범위: ${markdownText(artifact.change.comparison)}
-- 컨텍스트: ${contextStatus}
-- 지문: ${markdownText(artifact.change.context.fingerprint)}
+- Comparison: ${markdownText(artifact.change.comparison)}
+- Base commit: ${markdownText(artifact.change.context.baseCommit)}
+- Context: ${contextStatus}
+- Fingerprint: ${markdownText(artifact.change.context.fingerprint)}
 
-### 컨텍스트 경고
+### Context warnings
 
 ${warnings}
 
 ${exclusionsSection}
-## 목표
+## Goal
 
 ${markdownText(artifact.explanation.goal)}
 
-## 관찰 가능한 변화
+## Observable changes
 
 ${bullets(artifact.explanation.observableChanges)}
 
-## 파일과 책임
+## Files and responsibilities
 
 ${files}
 
-## 이전과 이후
+## Before and after
 
 ${markdownBeforeAfter(artifact.explanation.beforeAfter)}
 
-## 동작 흐름
+## Behavior flow
 
 ${flow}
 
-## 불변 조건
+## Invariants
 
 ${bullets(artifact.explanation.invariants)}
 
-## 결정과 절충
+## Decisions and trade-offs
 
 ${decisions}
 
-## 비목표
+## Non-goals
 
 ${bullets(artifact.explanation.nonGoals)}
 
-## 위험
+## Risks
 
 ${bullets(artifact.explanation.risks)}
 
-## 검증
+## Verification
 
 ${verification}
+
+## Teaching intent links
+
+${quizIntentLinks || "- None (standalone change understanding)"}
+
+- Microworld: ${microworldIntentLinks}
+
+## Knowledge promotion candidates
+
+${knowledgeCandidates}
+
+Promotion candidates are proposals only; Hope does not modify the repository automatically.
 `;
 }
 
@@ -568,71 +740,94 @@ export function renderIndexHtml(artifact) {
   ].join("; ");
 
   return `<!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}">
-  <title>변경 이해 번들</title>
+  <title>Hope Change Understanding Bundle</title>
   <style>${BROWSER_STYLE}</style>
 </head>
 <body>
   <header>
-    <p class="eyebrow">DiffScope</p>
-    <h1 id="artifact-title">변경 이해 번들</h1>
+    <p class="eyebrow">Hope · diff</p>
+    <h1 id="artifact-title">Change Understanding Bundle</h1>
     <p id="artifact-summary" class="lede"></p>
   </header>
   <main>
+    <section aria-labelledby="intent-alignment-heading">
+      <p class="eyebrow">Intent alignment</p>
+      <h2 id="intent-alignment-heading">Approved intent and actual change</h2>
+      <p id="intent-status"></p>
+      <p id="intent-fingerprint" class="muted" hidden></p>
+      <p id="alignment-summary"></p>
+      <ol id="alignment-checks" class="flow"></ol>
+      <div id="deviation-block" hidden>
+        <h3>Deviations requiring user judgment</h3>
+        <ul id="deviation-list"></ul>
+      </div>
+    </section>
+
     <section aria-labelledby="explanation-heading">
-      <h2 id="explanation-heading">설명 문서</h2>
+      <h2 id="explanation-heading">Explanation</h2>
       <p id="comparison" class="muted"></p>
+      <p class="muted">Base commit: <code id="base-commit"></code></p>
       <div id="context-status"></div>
       <div id="context-exclusion-block" hidden>
-        <h3>제외된 컨텍스트</h3>
+        <h3>Excluded context</h3>
         <ul id="context-exclusions"></ul>
       </div>
-      <h3>목표</h3>
+      <h3>Goal</h3>
       <p id="goal"></p>
-      <h3>관찰 가능한 변화</h3>
+      <h3>Observable changes</h3>
       <div id="observable-list"></div>
-      <h3>파일과 책임</h3>
+      <h3>Files and responsibilities</h3>
       <ul id="file-list"></ul>
-      <h3>이전과 이후</h3>
+      <h3>Before and after</h3>
       <div id="before-after" class="grid two"></div>
-      <h3>동작 흐름</h3>
+      <h3>Behavior flow</h3>
       <ol id="flow-list" class="flow"></ol>
       <div class="grid two">
-        <div><h3>불변 조건</h3><div id="invariant-list"></div></div>
-        <div><h3>비목표</h3><div id="non-goal-list"></div></div>
+        <div><h3>Invariants</h3><div id="invariant-list"></div></div>
+        <div><h3>Non-goals</h3><div id="non-goal-list"></div></div>
       </div>
-      <h3>결정과 절충</h3>
+      <h3>Decisions and trade-offs</h3>
       <ul id="decision-list"></ul>
-      <h3>위험</h3>
+      <h3>Risks</h3>
       <div id="risk-list"></div>
-      <h3>검증</h3>
+      <h3>Verification</h3>
       <ul id="verification-list"></ul>
+    </section>
+
+    <section aria-labelledby="knowledge-heading">
+      <p class="eyebrow">Cognitive debt</p>
+      <h2 id="knowledge-heading">Knowledge promotion candidates</h2>
+      <p class="muted">Candidates for preserving knowledge that is hard to reconstruct from code and Git in an existing source of truth. Hope does not modify the repository automatically.</p>
+      <p id="knowledge-empty" class="muted" hidden>No promotion candidates were identified for this change.</p>
+      <ul id="knowledge-list"></ul>
     </section>
 
     <section aria-labelledby="quiz-heading">
       <p class="eyebrow">Focused self-check</p>
-      <h2 id="quiz-heading">이해도 퀴즈</h2>
-      <p class="muted">정답률은 특정 이해 공백을 찾기 위한 신호이며, 전체 이해를 증명하지 않습니다.</p>
+      <h2 id="quiz-heading">Understanding quiz</h2>
+      <p class="muted">The score helps locate specific understanding gaps; it does not prove complete understanding.</p>
       <form id="quiz-form"></form>
       <p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1"></p>
     </section>
 
     <section aria-labelledby="microworld-heading">
       <p class="eyebrow">Interactive microworld</p>
-      <h2 id="microworld-heading">마이크로월드</h2>
+      <h2 id="microworld-heading">Microworld</h2>
       <h3 id="microworld-title"></h3>
       <p id="microworld-instructions"></p>
+      <div id="microworld-intent-links"></div>
       <div id="microworld-controls" class="controls"></div>
-      <div id="scenario-view" role="region" aria-live="polite" aria-label="선택한 시나리오"></div>
+      <div id="scenario-view" role="region" aria-live="polite" aria-label="Selected scenario"></div>
     </section>
   </main>
-  <footer>이 파일은 오프라인으로 동작하며 네트워크 요청을 만들지 않습니다.</footer>
-  <noscript>퀴즈와 마이크로월드를 사용하려면 JavaScript가 필요합니다.</noscript>
+  <footer>This file created by Hope works offline and makes no network requests.</footer>
+  <noscript>JavaScript is required to use the quiz and microworld.</noscript>
   <script id="artifact-data" type="application/json">${artifactJson}</script>
   <script>${BROWSER_SCRIPT}</script>
 </body>
@@ -654,7 +849,7 @@ async function pathExists(path) {
 
 async function createOutputDirectory(outputDir) {
   if (outputDir === undefined) {
-    const directory = await mkdtemp(join(tmpdir(), "diff-scope-"));
+    const directory = await mkdtemp(join(tmpdir(), "hope-"));
     await chmod(directory, 0o700);
     return directory;
   }
@@ -696,9 +891,10 @@ async function writeBundleAtomically(directory, outputs) {
 
 export async function renderUnderstandingBundle(artifact, options = {}) {
   if (options.context === undefined) {
-    throw new ContextBindingError(["ChangeContextV1 is required before rendering a bundle"]);
+    throw new ContextBindingError(["ChangeContextV2 is required before rendering a bundle"]);
   }
   validateArtifactAgainstContext(artifact, options.context);
+  validateArtifactAgainstIntent(artifact, options.intent);
 
   const artifactJson = `${JSON.stringify(artifact, null, 2)}\n`;
   const explanationMarkdown = renderExplanationMarkdown(artifact);
