@@ -49,7 +49,7 @@ assert.ok(
     (entry) => entry.name === "diff-scope" && entry.source.path === "./plugins/diff-scope",
   ),
 );
-assert.match(skill, /^---\nname: diff\ndescription: /u);
+assert.match(skill, /^---\r?\nname: diff\r?\ndescription: /u);
 assert.doesNotMatch(skill, /\[TODO:|understand-change|change-understanding/u);
 assert.equal(contextSchema.properties.scope.properties.kind.const, "working-tree");
 assert.equal(contextSchema.properties.scope.properties.includeUntrackedBodies.const, true);
