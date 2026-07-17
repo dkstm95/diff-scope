@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "title": "요청 식별자 검증 변경 이해",
+  "change": {
+    "summary": "라우터가 서비스 호출 전에 요청 식별자를 검증하도록 변경했다.",
+    "comparison": "HEAD -> working tree (staged + unstaged + safe untracked)",
+    "context": {
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "complete": true,
+      "warnings": [],
+      "excluded": []
+    },
+    "files": [
+      {
+        "path": "src/routing.mjs",
+        "responsibility": "요청 식별자를 검증하고 유효한 요청만 서비스에 전달한다."
+      },
+      {
+        "path": "test/routing.test.mjs",
+        "responsibility": "유효한 식별자와 누락된 식별자의 동작을 검증한다."
+      }
+    ]
+  },
+  "explanation": {
+    "goal": "잘못된 요청을 저장소 접근 전에 일관된 400 응답으로 종료한다.",
+    "observableChanges": [
+      "식별자가 없는 요청은 400 상태와 오류 코드를 받는다.",
+      "유효한 요청의 성공 및 404 동작은 유지된다."
+    ],
+    "beforeAfter": [
+      {
+        "area": "입력 경계",
+        "before": "라우터가 식별자 유무와 관계없이 서비스를 호출했다.",
+        "after": "라우터가 식별자가 없으면 서비스를 호출하지 않고 400을 반환한다.",
+        "why": "잘못된 입력이 도메인 계층으로 전파되지 않게 하기 위해서다."
+      }
+    ],
+    "flow": [
+      {
+        "step": 1,
+        "component": "라우터",
+        "behavior": "요청에서 식별자를 읽고 비어 있는지 확인한다."
+      },
+      {
+        "step": 2,
+        "component": "서비스",
+        "behavior": "검증을 통과한 식별자로만 저장소를 조회한다."
+      },
+      {
+        "step": 3,
+        "component": "응답 매퍼",
+        "behavior": "조회 결과를 200 또는 404 응답으로 변환한다."
+      }
+    ],
+    "invariants": [
+      "유효한 식별자의 성공 응답 형식은 바뀌지 않는다.",
+      "누락된 식별자는 저장소 조회를 만들지 않는다."
+    ],
+    "decisions": [
+      {
+        "decision": "라우터에서 식별자를 검증한다.",
+        "rationale": "요청 형식 오류를 가장 가까운 입력 경계에서 처리할 수 있다.",
+        "tradeoff": "다른 진입점이 생기면 같은 검증 규칙을 공유해야 한다."
+      }
+    ],
+    "nonGoals": ["식별자 형식 전체를 재설계하지 않는다.", "저장소 조회 전략을 변경하지 않는다."],
+    "risks": [
+      "라우터 외의 진입점이 검증을 우회할 수 있다.",
+      "공백 문자열 처리 규칙이 클라이언트 기대와 다를 수 있다."
+    ],
+    "verification": [
+      {
+        "command": "node --test test/routing.test.mjs",
+        "status": "passed",
+        "result": "유효, 누락, 조회 실패 시나리오 3개가 통과했다."
+      }
+    ]
+  },
+  "quiz": {
+    "passPercent": 67,
+    "questions": [
+      {
+        "id": "boundary",
+        "type": "single",
+        "prompt": "누락된 식별자를 가장 먼저 처리하는 컴포넌트는 무엇인가?",
+        "options": [
+          { "id": "router", "text": "라우터" },
+          { "id": "service", "text": "서비스" },
+          { "id": "repository", "text": "저장소" }
+        ],
+        "correctOptionIds": ["router"],
+        "explanation": "요청 형식 오류는 라우터에서 서비스 호출 전에 종료된다.",
+        "evidencePaths": ["src/routing.mjs"]
+      },
+      {
+        "id": "invariants",
+        "type": "multiple",
+        "prompt": "이 변경 뒤에도 유지되어야 하는 동작을 모두 고르시오.",
+        "options": [
+          { "id": "success-shape", "text": "유효한 식별자의 성공 응답 형식" },
+          { "id": "missing-query", "text": "누락된 식별자의 저장소 조회" },
+          { "id": "not-found", "text": "유효하지만 없는 데이터의 404 응답" }
+        ],
+        "correctOptionIds": ["success-shape", "not-found"],
+        "explanation": "유효한 요청의 200 및 404 계약은 유지되고, 누락 요청의 조회는 제거된다.",
+        "evidencePaths": ["src/routing.mjs", "test/routing.test.mjs"]
+      },
+      {
+        "id": "prediction",
+        "type": "single",
+        "prompt": "식별자가 없고 저장소에도 데이터가 없을 때 변경 후 결과는 무엇인가?",
+        "options": [
+          { "id": "bad-request", "text": "저장소 조회 없이 400" },
+          { "id": "not-found", "text": "저장소 조회 뒤 404" },
+          { "id": "success", "text": "빈 결과로 200" }
+        ],
+        "correctOptionIds": ["bad-request"],
+        "explanation": "입력 검증이 조회보다 먼저 실행되므로 저장소 상태는 결과에 영향을 주지 않는다.",
+        "evidencePaths": ["src/routing.mjs", "test/routing.test.mjs"]
+      }
+    ]
+  },
+  "microworld": {
+    "title": "입력과 저장소 상태에 따른 요청 흐름",
+    "instructions": "요청 식별자와 저장소 상태를 바꾸며 변경 전후의 실행 경로를 비교하세요.",
+    "controls": [
+      {
+        "id": "request-id",
+        "label": "요청 식별자",
+        "defaultOptionId": "valid",
+        "options": [{ "id": "valid", "text": "유효함" }, { "id": "missing", "text": "누락됨" }]
+      },
+      {
+        "id": "repository-state",
+        "label": "저장소 상태",
+        "defaultOptionId": "found",
+        "options": [
+          { "id": "found", "text": "데이터 있음" },
+          { "id": "absent", "text": "데이터 없음" }
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "valid-found",
+        "title": "유효한 요청이 데이터를 찾음",
+        "when": [
+          { "controlId": "request-id", "optionId": "valid" },
+          { "controlId": "repository-state", "optionId": "found" }
+        ],
+        "before": {
+          "steps": [
+            { "component": "라우터", "behavior": "검증 없이 서비스를 호출한다." },
+            { "component": "저장소", "behavior": "데이터를 반환한다." }
+          ],
+          "outcome": "200 성공 응답"
+        },
+        "after": {
+          "steps": [
+            { "component": "라우터", "behavior": "식별자를 검증하고 서비스를 호출한다." },
+            { "component": "저장소", "behavior": "데이터를 반환한다." }
+          ],
+          "outcome": "200 성공 응답"
+        },
+        "lesson": "유효한 성공 경로의 외부 계약은 유지된다."
+      },
+      {
+        "id": "valid-absent",
+        "title": "유효한 요청이 데이터를 찾지 못함",
+        "when": [
+          { "controlId": "request-id", "optionId": "valid" },
+          { "controlId": "repository-state", "optionId": "absent" }
+        ],
+        "before": {
+          "steps": [
+            { "component": "라우터", "behavior": "검증 없이 서비스를 호출한다." },
+            { "component": "저장소", "behavior": "빈 조회 결과를 반환한다." }
+          ],
+          "outcome": "404 응답"
+        },
+        "after": {
+          "steps": [
+            { "component": "라우터", "behavior": "식별자를 검증하고 서비스를 호출한다." },
+            { "component": "저장소", "behavior": "빈 조회 결과를 반환한다." }
+          ],
+          "outcome": "404 응답"
+        },
+        "lesson": "유효한 요청의 조회 실패 계약도 유지된다."
+      },
+      {
+        "id": "missing-found",
+        "title": "식별자가 없지만 데이터가 있는 상태",
+        "when": [
+          { "controlId": "request-id", "optionId": "missing" },
+          { "controlId": "repository-state", "optionId": "found" }
+        ],
+        "before": {
+          "steps": [
+            { "component": "라우터", "behavior": "빈 식별자를 서비스에 전달한다." },
+            { "component": "저장소", "behavior": "불필요한 조회를 수행한다." }
+          ],
+          "outcome": "저장소 구현에 따라 결과가 달라질 수 있음"
+        },
+        "after": {
+          "steps": [
+            { "component": "라우터", "behavior": "누락된 식별자를 발견한다." },
+            { "component": "응답 매퍼", "behavior": "서비스 호출 없이 오류를 만든다." }
+          ],
+          "outcome": "400 응답"
+        },
+        "lesson": "잘못된 입력은 저장소 상태와 무관하게 같은 결과를 만든다."
+      },
+      {
+        "id": "missing-absent",
+        "title": "식별자가 없고 데이터도 없는 상태",
+        "when": [
+          { "controlId": "request-id", "optionId": "missing" },
+          { "controlId": "repository-state", "optionId": "absent" }
+        ],
+        "before": {
+          "steps": [
+            { "component": "라우터", "behavior": "빈 식별자를 서비스에 전달한다." },
+            { "component": "저장소", "behavior": "불필요한 조회 뒤 빈 결과를 반환한다." }
+          ],
+          "outcome": "404 또는 내부 오류 가능"
+        },
+        "after": {
+          "steps": [
+            { "component": "라우터", "behavior": "누락된 식별자를 발견한다." },
+            { "component": "응답 매퍼", "behavior": "서비스 호출 없이 오류를 만든다." }
+          ],
+          "outcome": "400 응답"
+        },
+        "lesson": "입력 경계의 검증이 내부 상태에 따른 불확실성을 제거한다."
+      }
+    ]
+  }
+}

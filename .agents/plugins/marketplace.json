@@ -1,0 +1,20 @@
+{
+  "name": "diff-scope",
+  "interface": {
+    "displayName": "DiffScope"
+  },
+  "plugins": [
+    {
+      "name": "diff-scope",
+      "source": {
+        "source": "local",
+        "path": "./plugins/diff-scope"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    }
+  ]
+}

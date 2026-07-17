@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm run check
+      - name: Package plugin
+        run: |
+          zip -r "diff-scope-${GITHUB_REF_NAME}.zip" plugins/diff-scope
+          sha256sum "diff-scope-${GITHUB_REF_NAME}.zip" > "diff-scope-${GITHUB_REF_NAME}.zip.sha256"
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}"
+          "diff-scope-${GITHUB_REF_NAME}.zip"
+          "diff-scope-${GITHUB_REF_NAME}.zip.sha256"
+          --title "DiffScope ${GITHUB_REF_NAME}"
+          --notes-file CHANGELOG.md
+          --prerelease

@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/dkstm95/diff-scope/main/plugins/diff-scope/skills/diff/references/artifact-v1.schema.json",
+  "title": "Change Understanding ArtifactV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "title", "change", "explanation", "quiz", "microworld"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "title": { "$ref": "#/$defs/nonEmptyText" },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "comparison", "context", "files"],
+      "properties": {
+        "summary": { "$ref": "#/$defs/nonEmptyText" },
+        "comparison": { "$ref": "#/$defs/nonEmptyText" },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fingerprint", "complete", "warnings", "excluded"],
+          "properties": {
+            "fingerprint": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "complete": { "type": "boolean" },
+            "warnings": {
+              "type": "array",
+              "maxItems": 40,
+              "items": { "$ref": "#/$defs/nonEmptyText" }
+            },
+            "excluded": {
+              "type": "array",
+              "maxItems": 81,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["path", "reason"],
+                "properties": {
+                  "path": { "$ref": "#/$defs/relativePath" },
+                  "reason": { "$ref": "#/$defs/nonEmptyText" }
+                }
+              }
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 80,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "responsibility"],
+            "properties": {
+              "path": { "$ref": "#/$defs/relativePath" },
+              "responsibility": { "$ref": "#/$defs/nonEmptyText" }
+            }
+          }
+        }
+      }
+    },
+    "explanation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "goal",
+        "observableChanges",
+        "beforeAfter",
+        "flow",
+        "invariants",
+        "decisions",
+        "nonGoals",
+        "risks",
+        "verification"
+      ],
+      "properties": {
+        "goal": { "$ref": "#/$defs/nonEmptyText" },
+        "observableChanges": {
+          "$ref": "#/$defs/nonEmptyTextList"
+        },
+        "beforeAfter": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["area", "before", "after", "why"],
+            "properties": {
+              "area": { "$ref": "#/$defs/nonEmptyText" },
+              "before": { "$ref": "#/$defs/nonEmptyText" },
+              "after": { "$ref": "#/$defs/nonEmptyText" },
+              "why": { "$ref": "#/$defs/nonEmptyText" }
+            }
+          }
+        },
+        "flow": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["step", "component", "behavior"],
+            "properties": {
+              "step": { "type": "integer", "minimum": 1, "maximum": 30 },
+              "component": { "$ref": "#/$defs/nonEmptyText" },
+              "behavior": { "$ref": "#/$defs/nonEmptyText" }
+            }
+          }
+        },
+        "invariants": { "$ref": "#/$defs/nonEmptyTextList" },
+        "decisions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["decision", "rationale", "tradeoff"],
+            "properties": {
+              "decision": { "$ref": "#/$defs/nonEmptyText" },
+              "rationale": { "$ref": "#/$defs/nonEmptyText" },
+              "tradeoff": { "$ref": "#/$defs/nonEmptyText" }
+            }
+          }
+        },
+        "nonGoals": { "$ref": "#/$defs/nonEmptyTextList" },
+        "risks": { "$ref": "#/$defs/nonEmptyTextList" },
+        "verification": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["command", "status", "result"],
+            "properties": {
+              "command": { "$ref": "#/$defs/nonEmptyText" },
+              "status": { "enum": ["passed", "failed", "not-run"] },
+              "result": { "$ref": "#/$defs/nonEmptyText" }
+            }
+          }
+        }
+      }
+    },
+    "quiz": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passPercent", "questions"],
+      "properties": {
+        "passPercent": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "questions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "type",
+              "prompt",
+              "options",
+              "correctOptionIds",
+              "explanation",
+              "evidencePaths"
+            ],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "type": { "enum": ["single", "multiple"] },
+              "prompt": { "$ref": "#/$defs/nonEmptyText" },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 6,
+                "items": { "$ref": "#/$defs/option" }
+              },
+              "correctOptionIds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 6,
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/id" }
+              },
+              "explanation": { "$ref": "#/$defs/nonEmptyText" },
+              "evidencePaths": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 10,
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/relativePath" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "microworld": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "instructions", "controls", "scenarios"],
+      "properties": {
+        "title": { "$ref": "#/$defs/nonEmptyText" },
+        "instructions": { "$ref": "#/$defs/nonEmptyText" },
+        "controls": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "defaultOptionId", "options"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "label": { "$ref": "#/$defs/nonEmptyText" },
+              "defaultOptionId": { "$ref": "#/$defs/id" },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 4,
+                "items": { "$ref": "#/$defs/option" }
+              }
+            }
+          }
+        },
+        "scenarios": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title", "when", "before", "after", "lesson"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "title": { "$ref": "#/$defs/nonEmptyText" },
+              "when": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["controlId", "optionId"],
+                  "properties": {
+                    "controlId": { "$ref": "#/$defs/id" },
+                    "optionId": { "$ref": "#/$defs/id" }
+                  }
+                }
+              },
+              "before": { "$ref": "#/$defs/trace" },
+              "after": { "$ref": "#/$defs/trace" },
+              "lesson": { "$ref": "#/$defs/nonEmptyText" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "nonEmptyTextList": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "items": { "$ref": "#/$defs/nonEmptyText" }
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)[^\\u0000]+$"
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps", "outcome"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["component", "behavior"],
+            "properties": {
+              "component": { "$ref": "#/$defs/nonEmptyText" },
+              "behavior": { "$ref": "#/$defs/nonEmptyText" }
+            }
+          }
+        },
+        "outcome": { "$ref": "#/$defs/nonEmptyText" }
+      }
+    }
+  }
+}
