@@ -129,12 +129,12 @@ test("collects staged, unstaged, and safe untracked changes", async (t) => {
   assert.match(patchFor(context, "notes.txt"), /private untracked notes/u);
   assert.equal(patchFor(context, ".env"), undefined);
   assert.doesNotMatch(serialized, /must-never-be-read|must-never-read-service-account/u);
-  assert.doesNotMatch(serialized, new RegExp(root, "u"));
+  assert.equal(serialized.includes(root), false);
   assert.ok(context.warnings.some((warning) => warning.includes("redacted")));
   assert.ok(context.warnings.some((warning) => warning.includes("safety or size policy")));
 });
 
-test("reads only explicitly requested safe untracked bodies and redacts them", async (t) => {
+test("reads safe untracked bodies and redacts them", async (t) => {
   const root = await makeRepository(t);
   await put(root, "tracked.txt", "tracked\n");
   await commitAll(root, "initial");
@@ -257,7 +257,9 @@ test("hashes and excludes Git paths longer than the 300-character context contra
   await commitAll(root, "initial");
   const longPath = ["a".repeat(100), "b".repeat(100), `${"c".repeat(99)}.txt`].join("/");
   assert.ok(longPath.length > 300);
-  await put(root, longPath, "must not enter context\n");
+  if (process.platform !== "win32") {
+    await put(root, longPath, "must not enter context\n");
+  }
   await put(root, "~ambiguous.txt", "must also stay behind a placeholder\n");
   await put(root, "tracked.txt", "safe tracked change\n");
 
@@ -266,7 +268,7 @@ test("hashes and excludes Git paths longer than the 300-character context contra
 
   assert.equal(classifyPath(longPath), "unsafe-path");
   assert.equal(classifyPath("~ambiguous.txt"), "unsafe-path");
-  assert.equal(placeholders.length, 2);
+  assert.equal(placeholders.length, process.platform === "win32" ? 1 : 2);
   for (const entry of placeholders) {
     assert.equal(entry.omissionReason, "unsafe-path");
     assert.ok(
@@ -309,8 +311,10 @@ test("writes mode-restricted output and refuses existing or symlink paths", asyn
   const defaultOutput = await writeContextFile(context);
   const defaultDirectory = path.dirname(defaultOutput);
   t.after(async () => await rm(defaultDirectory, { recursive: true, force: true }));
-  assert.equal((await lstat(defaultDirectory)).mode & 0o777, 0o700);
-  assert.equal((await lstat(defaultOutput)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await lstat(defaultDirectory)).mode & 0o777, 0o700);
+    assert.equal((await lstat(defaultOutput)).mode & 0o777, 0o600);
+  }
   assert.equal(JSON.parse(await readFile(defaultOutput, "utf8")).fingerprint, context.fingerprint);
 
   const explicitDirectory = await mkdtemp(path.join(tmpdir(), "collector-output-"));
@@ -318,7 +322,9 @@ test("writes mode-restricted output and refuses existing or symlink paths", asyn
   await chmod(explicitDirectory, 0o700);
   const explicitOutput = path.join(explicitDirectory, "context.json");
   await writeContextFile(context, explicitOutput);
-  assert.equal((await lstat(explicitOutput)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await lstat(explicitOutput)).mode & 0o777, 0o600);
+  }
   await assert.rejects(writeContextFile(context, explicitOutput), /Refusing to overwrite/u);
 
   const danglingTarget = path.join(explicitDirectory, "missing.json");

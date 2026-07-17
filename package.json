@@ -9,7 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test",
     "check:release": "node tools/check-release.mjs",
     "check": "npm run check:release && npm test"
   }

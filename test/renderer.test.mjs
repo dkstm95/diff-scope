@@ -471,9 +471,11 @@ test("writes a private three-file bundle with no temporary leftovers", async (t)
   const result = await renderBound(artifact, { outputDir: output });
   assert.equal(result.directory, resolve(output));
   assert.deepEqual(await readdir(output), ["artifact.json", "explanation.md", "index.html"]);
-  assert.equal(mode(await stat(output)), 0o700);
-  for (const filename of await readdir(output)) {
-    assert.equal(mode(await stat(join(output, filename))), 0o600);
+  if (process.platform !== "win32") {
+    assert.equal(mode(await stat(output)), 0o700);
+    for (const filename of await readdir(output)) {
+      assert.equal(mode(await stat(join(output, filename))), 0o600);
+    }
   }
   assert.deepEqual(JSON.parse(await readFile(result.files.artifact, "utf8")), artifact);
   assert.match(await readFile(result.files.explanation, "utf8"), /## 관찰 가능한 변화/);
@@ -483,7 +485,9 @@ test("uses a private temporary directory by default", async (t) => {
   const result = await renderBound(await fixture());
   t.after(() => rm(result.directory, { recursive: true, force: true }));
   assert.equal(dirname(result.directory), resolve(tmpdir()));
-  assert.equal(mode(await stat(result.directory)), 0o700);
+  if (process.platform !== "win32") {
+    assert.equal(mode(await stat(result.directory)), 0o700);
+  }
 });
 
 test("validates before creating output and refuses existing paths", async (t) => {

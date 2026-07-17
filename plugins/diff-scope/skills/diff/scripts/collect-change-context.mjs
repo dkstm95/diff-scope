@@ -670,6 +670,18 @@ export async function readBoundedRegularFile(absolutePath, maxBytes, deadline) {
   let handle;
   let buffer;
   try {
+    const pathStats = await lstat(absolutePath);
+    deadline.remainingMs();
+    if (pathStats.isSymbolicLink()) {
+      return { omissionReason: "symlink" };
+    }
+    if (!pathStats.isFile()) {
+      return { omissionReason: "not-a-regular-file" };
+    }
+    if (pathStats.size > maxBytes) {
+      return { omissionReason: "per-file-byte-limit" };
+    }
+
     handle = await open(
       absolutePath,
       fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0),

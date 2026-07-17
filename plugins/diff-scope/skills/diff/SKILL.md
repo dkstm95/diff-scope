@@ -62,8 +62,7 @@ Apply these rules:
 Save the JSON to a private temporary file, then run:
 
 ```bash
-node <skill-dir>/scripts/render-diff.mjs \
-  --input <artifact.json> --context <change-context.json>
+node <skill-dir>/scripts/render-diff.mjs --input <artifact.json> --context <change-context.json>
 ```
 
 Use `--output <new-directory>` only when the user asks for durable files. Never
