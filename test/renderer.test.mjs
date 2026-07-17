@@ -21,6 +21,7 @@ import { parseRenderArguments } from "../plugins/diff-scope/skills/diff/scripts/
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(testDirectory, "fixtures", "artifact-v1.json");
+const HANGUL_PATTERN = /[\u1100-\u11ff\u3130-\u318f\ua960-\ua97f\uac00-\ud7af\ud7b0-\ud7ff]/u;
 
 async function fixture() {
   return JSON.parse(await readFile(fixturePath, "utf8"));
@@ -28,6 +29,31 @@ async function fixture() {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function replaceHangulStrings(value, sequence = { value: 0 }) {
+  if (typeof value === "string") {
+    if (!HANGUL_PATTERN.test(value)) {
+      return value;
+    }
+    sequence.value += 1;
+    return `English sample text ${sequence.value}`;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => replaceHangulStrings(entry, sequence));
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, replaceHangulStrings(entry, sequence)]),
+    );
+  }
+  return value;
+}
+
+function englishFixture(artifact) {
+  const translated = replaceHangulStrings(artifact);
+  assert.doesNotMatch(JSON.stringify(translated), HANGUL_PATTERN);
+  return translated;
 }
 
 function mode(value) {
@@ -428,8 +454,16 @@ test("renders deterministic offline HTML with inert embedded data", async () => 
   const first = renderIndexHtml(artifact);
   const second = renderIndexHtml(artifact);
   assert.equal(first, second);
+  assert.match(first, /<html lang="ko">/);
+  assert.match(first, /<h2 id="explanation-heading">설명 문서<\/h2>/);
+  assert.match(first, /<script id="ui-data" type="application\/json">/);
+  assert.match(first, /--accent: #5b5bd6/);
+  assert.match(first, /rgba\(91, 91, 214, 0\.3\)/);
   assert.match(first, /Content-Security-Policy/);
   assert.match(first, /script-src 'sha256-[A-Za-z0-9+/=]+'/);
+  const scriptDirective = first.match(/script-src ([^;]+)/u)?.[1];
+  assert.ok(scriptDirective);
+  assert.equal([...scriptDirective.matchAll(/'sha256-[A-Za-z0-9+/=]+'/gu)].length, 3);
   assert.match(first, /document\.createElement/);
   assert.match(first, /\.textContent/);
   assert.match(first, /correctOptionIds/);
@@ -443,6 +477,55 @@ test("renders deterministic offline HTML with inert embedded data", async () => 
   assert.doesNotMatch(first, /\bfetch\s*\(/);
   assert.doesNotMatch(first, /new\s+Function/);
   assert.doesNotMatch(first, /https?:\/\//);
+});
+
+test("localizes deterministic HTML and Markdown from ArtifactV1 text", async (t) => {
+  await t.test("Hangul selects Korean", async () => {
+    const artifact = await fixture();
+    const firstHtml = renderIndexHtml(artifact);
+    const secondHtml = renderIndexHtml(artifact);
+    const firstMarkdown = renderExplanationMarkdown(artifact);
+    const secondMarkdown = renderExplanationMarkdown(artifact);
+
+    assert.equal(firstHtml, secondHtml);
+    assert.equal(firstMarkdown, secondMarkdown);
+    assert.match(firstHtml, /<html lang="ko">/);
+    assert.match(firstHtml, /<title>변경 이해 번들<\/title>/);
+    assert.match(firstHtml, /<h2 id="quiz-heading">이해도 퀴즈<\/h2>/);
+    assert.match(firstHtml, /"quizSubmit":"채점하고 해설 보기"/);
+    assert.match(firstMarkdown, /^## 변경 요약$/mu);
+    assert.match(firstMarkdown, /^- 컨텍스트: 완전$/mu);
+    assert.match(firstMarkdown, /^## 결정과 절충$/mu);
+  });
+
+  await t.test("no Hangul selects English", async () => {
+    const artifact = englishFixture(await fixture());
+    const firstHtml = renderIndexHtml(artifact);
+    const secondHtml = renderIndexHtml(artifact);
+    const firstMarkdown = renderExplanationMarkdown(artifact);
+    const secondMarkdown = renderExplanationMarkdown(artifact);
+
+    assert.equal(firstHtml, secondHtml);
+    assert.equal(firstMarkdown, secondMarkdown);
+    assert.match(firstHtml, /<html lang="en">/);
+    assert.match(firstHtml, /<title>Change understanding bundle<\/title>/);
+    assert.match(firstHtml, /<h2 id="explanation-heading">Change explanation<\/h2>/);
+    assert.match(firstHtml, /<h2 id="quiz-heading">Understanding quiz<\/h2>/);
+    assert.match(firstHtml, /"quizSubmit":"Score and show explanations"/);
+    assert.match(firstMarkdown, /^## Change summary$/mu);
+    assert.match(firstMarkdown, /^- Context: Complete$/mu);
+    assert.match(firstMarkdown, /^## Decisions and trade-offs$/mu);
+    assert.doesNotMatch(firstHtml, HANGUL_PATTERN);
+    assert.doesNotMatch(firstMarkdown, HANGUL_PATTERN);
+  });
+
+  await t.test("isolated Hangul metadata does not relabel English prose", async () => {
+    const artifact = englishFixture(await fixture());
+    artifact.change.context.warnings = ["한글 경고"];
+
+    assert.match(renderIndexHtml(artifact), /<html lang="en">/);
+    assert.match(renderExplanationMarkdown(artifact), /^### Context warnings$/mu);
+  });
 });
 
 test("shows exact exclusions only when the context excluded something", async () => {

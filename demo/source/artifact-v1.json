@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "title": "Reject missing request IDs at the input boundary",
+  "change": {
+    "summary": "The router now rejects requests without an ID before they can reach the repository.",
+    "comparison": "HEAD -> working tree (staged + unstaged + safe untracked)",
+    "context": {
+      "fingerprint": "4b3b646f5fe529370aa63ca58bf725870339cf91dcd271e480e119f46b95fdd3",
+      "complete": true,
+      "warnings": [],
+      "excluded": []
+    },
+    "files": [
+      {
+        "path": "src/routing.mjs",
+        "responsibility": "Validate the request ID and pass only valid requests to the repository."
+      },
+      {
+        "path": "test/routing.test.mjs",
+        "responsibility": "Protect the valid, missing, and not-found request paths."
+      }
+    ]
+  },
+  "explanation": {
+    "goal": "Return one predictable client error for malformed requests without doing unnecessary repository work.",
+    "observableChanges": [
+      "A request without an ID now receives a 400 response with request_id_required.",
+      "Valid requests keep their existing 200 and 404 behavior."
+    ],
+    "beforeAfter": [
+      {
+        "area": "Request boundary",
+        "before": "Every request reached the repository, even when its ID was missing.",
+        "after": "The router trims and validates the ID, then stops invalid requests with a 400 response.",
+        "why": "Malformed input should be handled at the closest boundary instead of leaking into domain storage."
+      }
+    ],
+    "flow": [
+      {
+        "step": 1,
+        "component": "Router",
+        "behavior": "Read and normalize the request ID."
+      },
+      {
+        "step": 2,
+        "component": "Input guard",
+        "behavior": "Return request_id_required when the normalized ID is empty."
+      },
+      {
+        "step": 3,
+        "component": "Repository",
+        "behavior": "Look up only requests that passed the input guard."
+      }
+    ],
+    "invariants": [
+      "A valid ID still produces the same 200 or 404 response as before.",
+      "A missing ID never causes repository access."
+    ],
+    "decisions": [
+      {
+        "decision": "Validate in the router.",
+        "rationale": "The router is the closest boundary that understands the request shape.",
+        "tradeoff": "Future entry points must reuse or repeat the same validation rule."
+      }
+    ],
+    "nonGoals": [
+      "Redesign the full request ID format.",
+      "Change the repository lookup strategy."
+    ],
+    "risks": [
+      "Another entry point could bypass the router-level guard.",
+      "Clients may need confirmation that whitespace-only IDs are invalid."
+    ],
+    "verification": [
+      {
+        "command": "node --test test/routing.test.mjs",
+        "status": "not-run",
+        "result": "This is a representative synthetic demo; no repository command was run."
+      }
+    ]
+  },
+  "quiz": {
+    "passPercent": 67,
+    "questions": [
+      {
+        "id": "missing-id-path",
+        "type": "single",
+        "prompt": "What happens after the change when the request ID is missing?",
+        "options": [
+          {
+            "id": "repository-lookup",
+            "text": "The repository is queried with an empty ID."
+          },
+          {
+            "id": "client-error",
+            "text": "The router returns a 400 error before repository access."
+          },
+          {
+            "id": "not-found",
+            "text": "The request always becomes a 404 response."
+          }
+        ],
+        "correctOptionIds": ["client-error"],
+        "explanation": "The new input guard stops a missing ID at the router and returns request_id_required.",
+        "evidencePaths": ["src/routing.mjs", "test/routing.test.mjs"]
+      },
+      {
+        "id": "preserved-behavior",
+        "type": "multiple",
+        "prompt": "Which behaviors must remain unchanged for valid IDs?",
+        "options": [
+          {
+            "id": "found-is-200",
+            "text": "A found record still returns 200."
+          },
+          {
+            "id": "absent-is-404",
+            "text": "An absent record still returns 404."
+          },
+          {
+            "id": "all-ids-are-400",
+            "text": "Every valid ID now returns 400."
+          }
+        ],
+        "correctOptionIds": ["found-is-200", "absent-is-404"],
+        "explanation": "The guard changes only malformed requests; valid repository outcomes are invariants.",
+        "evidencePaths": ["src/routing.mjs", "test/routing.test.mjs"]
+      },
+      {
+        "id": "next-safe-change",
+        "type": "single",
+        "prompt": "What should be checked before adding a second request entry point?",
+        "options": [
+          {
+            "id": "shared-validation",
+            "text": "Whether both entry points share the same ID validation rule."
+          },
+          {
+            "id": "database-rewrite",
+            "text": "Whether the repository should be rewritten first."
+          },
+          {
+            "id": "remove-tests",
+            "text": "Whether the existing router tests can be removed."
+          }
+        ],
+        "correctOptionIds": ["shared-validation"],
+        "explanation": "Router-level validation is local to one entry point, so a second path could bypass it.",
+        "evidencePaths": ["src/routing.mjs"]
+      }
+    ]
+  },
+  "microworld": {
+    "title": "Request path explorer",
+    "instructions": "Change the request ID and repository state to compare the before and after paths.",
+    "controls": [
+      {
+        "id": "request-id",
+        "label": "Request ID",
+        "defaultOptionId": "missing",
+        "options": [
+          {
+            "id": "valid",
+            "text": "Valid ID"
+          },
+          {
+            "id": "missing",
+            "text": "Missing ID"
+          }
+        ]
+      },
+      {
+        "id": "repository-state",
+        "label": "Repository state",
+        "defaultOptionId": "found",
+        "options": [
+          {
+            "id": "found",
+            "text": "Record found"
+          },
+          {
+            "id": "absent",
+            "text": "Record absent"
+          }
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "valid-found",
+        "title": "Valid request with a matching record",
+        "when": [
+          {
+            "controlId": "request-id",
+            "optionId": "valid"
+          },
+          {
+            "controlId": "repository-state",
+            "optionId": "found"
+          }
+        ],
+        "before": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Pass the ID directly to the repository."
+            },
+            {
+              "component": "Repository",
+              "behavior": "Return the matching record."
+            }
+          ],
+          "outcome": "200 response"
+        },
+        "after": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Validate the ID, then call the repository."
+            },
+            {
+              "component": "Repository",
+              "behavior": "Return the matching record."
+            }
+          ],
+          "outcome": "200 response"
+        },
+        "lesson": "The successful path keeps its external behavior."
+      },
+      {
+        "id": "valid-absent",
+        "title": "Valid request without a matching record",
+        "when": [
+          {
+            "controlId": "request-id",
+            "optionId": "valid"
+          },
+          {
+            "controlId": "repository-state",
+            "optionId": "absent"
+          }
+        ],
+        "before": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Pass the ID directly to the repository."
+            },
+            {
+              "component": "Repository",
+              "behavior": "Return no record."
+            }
+          ],
+          "outcome": "404 response"
+        },
+        "after": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Validate the ID, then call the repository."
+            },
+            {
+              "component": "Repository",
+              "behavior": "Return no record."
+            }
+          ],
+          "outcome": "404 response"
+        },
+        "lesson": "The valid not-found path also remains stable."
+      },
+      {
+        "id": "missing-found",
+        "title": "Missing ID while a record exists",
+        "when": [
+          {
+            "controlId": "request-id",
+            "optionId": "missing"
+          },
+          {
+            "controlId": "repository-state",
+            "optionId": "found"
+          }
+        ],
+        "before": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Pass an empty ID to the repository."
+            },
+            {
+              "component": "Repository",
+              "behavior": "Perform an unnecessary lookup."
+            }
+          ],
+          "outcome": "Repository-dependent result"
+        },
+        "after": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Detect the missing ID."
+            },
+            {
+              "component": "Input guard",
+              "behavior": "Return an error without repository access."
+            }
+          ],
+          "outcome": "400 response"
+        },
+        "lesson": "Malformed input now has one result regardless of repository state."
+      },
+      {
+        "id": "missing-absent",
+        "title": "Missing ID with no matching record",
+        "when": [
+          {
+            "controlId": "request-id",
+            "optionId": "missing"
+          },
+          {
+            "controlId": "repository-state",
+            "optionId": "absent"
+          }
+        ],
+        "before": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Pass an empty ID to the repository."
+            },
+            {
+              "component": "Repository",
+              "behavior": "Perform an unnecessary lookup and return no record."
+            }
+          ],
+          "outcome": "404 response or internal error"
+        },
+        "after": {
+          "steps": [
+            {
+              "component": "Router",
+              "behavior": "Detect the missing ID."
+            },
+            {
+              "component": "Input guard",
+              "behavior": "Return an error without repository access."
+            }
+          ],
+          "outcome": "400 response"
+        },
+        "lesson": "Boundary validation removes storage-dependent ambiguity."
+      }
+    ]
+  }
+}

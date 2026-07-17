@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "scope": {
+    "kind": "working-tree",
+    "comparison": "HEAD -> working tree (staged + unstaged + safe untracked)",
+    "includeUntrackedBodies": true
+  },
+  "complete": true,
+  "summary": {
+    "discoveredFiles": 2,
+    "representedFiles": 2,
+    "includedBodies": 2,
+    "omittedBodies": 0,
+    "additions": 12,
+    "deletions": 1,
+    "changedLines": 13,
+    "contextBytes": 1097
+  },
+  "files": [
+    {
+      "path": "src/routing.mjs",
+      "status": "modified",
+      "source": "tracked",
+      "additions": 5,
+      "deletions": 1,
+      "bodyIncluded": true
+    },
+    {
+      "path": "test/routing.test.mjs",
+      "status": "modified",
+      "source": "tracked",
+      "additions": 7,
+      "deletions": 0,
+      "bodyIncluded": true
+    }
+  ],
+  "patches": [
+    {
+      "path": "src/routing.mjs",
+      "kind": "diff",
+      "text": "diff --git a/src/routing.mjs b/src/routing.mjs\nindex 5ef70f1..8fd7ab1 100644\n--- a/src/routing.mjs\n+++ b/src/routing.mjs\n@@ -1,5 +1,9 @@\n export async function routeRequest(request, repository) {\n-  const record = await repository.find(request.id);\n+  const requestId = request.id?.trim();\n+  if (!requestId) {\n+    return { status: 400, body: { code: 'request_id_required' } };\n+  }\n+  const record = await repository.find(requestId);\n   return record ? { status: 200, body: record } : { status: 404 };\n }\n"
+    },
+    {
+      "path": "test/routing.test.mjs",
+      "kind": "diff",
+      "text": "diff --git a/test/routing.test.mjs b/test/routing.test.mjs\nindex 4205070..935aae8 100644\n--- a/test/routing.test.mjs\n+++ b/test/routing.test.mjs\n@@ -18,3 +18,10 @@ test('returns 404 when a valid ID is absent', async () => {\n   assert.equal(result.status, 404);\n });\n+\n+test('rejects a missing ID before repository access', async () => {\n+  const repository = { find: () => assert.fail('repository must not be called') };\n+  const result = await routeRequest({}, repository);\n+  assert.deepEqual(result, { status: 400, body: { code: 'request_id_required' } });\n+});\n"
+    }
+  ],
+  "excluded": [],
+  "warnings": [],
+  "fingerprint": "4b3b646f5fe529370aa63ca58bf725870339cf91dcd271e480e119f46b95fdd3"
+}

@@ -1,6 +1,6 @@
 {
   "name": "diff-scope",
-  "version": "0.1.0-alpha",
+  "version": "0.1.1-alpha",
   "private": true,
   "type": "module",
   "description": "Understand completed local code changes with explanations, quizzes, and interactive microworlds.",
@@ -9,6 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "build:site": "node tools/build-site.mjs",
     "test": "node --test",
     "check:release": "node tools/check-release.mjs",
     "check": "npm run check:release && npm test"

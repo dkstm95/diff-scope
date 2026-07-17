@@ -1,12 +1,12 @@
 {
   "name": "diff-scope",
-  "version": "0.1.0-alpha",
+  "version": "0.1.1-alpha",
   "description": "Understand completed local code changes with explanations, quizzes, and interactive microworlds.",
   "author": {
     "name": "SeungIl",
     "url": "https://github.com/dkstm95"
   },
-  "homepage": "https://github.com/dkstm95/diff-scope#readme",
+  "homepage": "https://dkstm95.github.io/diff-scope/",
   "repository": "https://github.com/dkstm95/diff-scope",
   "license": "MIT",
   "keywords": ["diff", "code-review", "learning", "microworld"],
@@ -16,10 +16,13 @@
     "shortDescription": "Understand completed code changes",
     "longDescription": "Turn the completed local working-tree change into an evidence-based explanation, an auto-scored quiz, and a safe offline interactive microworld.",
     "developerName": "SeungIl",
+    "websiteURL": "https://dkstm95.github.io/diff-scope/",
     "category": "Engineering",
     "capabilities": ["Read", "Write", "Interactive"],
     "defaultPrompt": [
-      "Explain my completed change, quiz me, and build a microworld."
+      "Explain the local change I just finished, then quiz me and make it explorable.",
+      "Teach me this change through its behavior, invariants, risks, and evidence.",
+      "Create a durable DiffScope bundle for this completed local change."
     ],
     "brandColor": "#5B5BD6",
     "composerIcon": "./assets/telescope.svg",

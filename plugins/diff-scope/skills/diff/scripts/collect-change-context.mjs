@@ -419,6 +419,10 @@ function statusName(statusCode) {
 }
 
 function redactAssignmentValues(line) {
+  if (/^[+\- ]*id-token\s*:\s*(?:write|none)\s*$/iu.test(line)) {
+    return line;
+  }
+
   const doubleQuoted = line.replace(
     /((?:secret[_-]?access[_-]?key|access[_-]?key(?:[_-]?id)?|password|passwd|pwd|secret|token|api[_-]?key|client[_-]?secret|private[_-]?key)["']?\s*[:=]\s*)"(?:\\.|[^"\\])*"/giu,
     '$1"[REDACTED]"',

@@ -6,27 +6,53 @@
 
 <p align="center"><strong>AI가 방금 완료한 코드를 승인하기 전에 이해하세요.</strong></p>
 
-<p align="center"><a href="README.md">English</a></p>
+<p align="center">
+  <a href="https://dkstm95.github.io/diff-scope/demo/"><strong>설치 없이 데모 체험하기</strong></a>
+  ·
+  <a href="README.md">English</a>
+</p>
+
+합성 예제로 브라우저에서 먼저 시작할 수 있다. 설치, 저장소, API 키가
+필요 없다. 데모는 `main`에서 배포되므로 첫 GitHub Pages 배포가
+완료되기 전에는 링크에서 404가 보일 수 있다.
+
+설치한 다음에는 Codex에 자연어로 요청하면 된다.
+
+```text
+방금 완료한 로컬 변경을 설명하고, 내 이해도를 퀴즈로 확인한 다음 직접 탐색하게 해줘.
+```
 
 DiffScope는 한 작업 단위로 완료된 로컬 코드 변경을 서로 연결된 세 가지
 학습 결과물로 만든다.
 
-- before-to-after 동작을 근거와 함께 설명하는 문서
-- 예측과 invariant를 확인하는 자동 채점 퀴즈
-- 변경된 동작을 직접 탐색하는 오프라인 인터랙티브 마이크로월드
+- **설명(Explain)** — before-to-after 동작, 인과 흐름, 판단, 위험, 근거를 본다.
+- **확인(Check)** — 예측과 invariant에 대한 자동 채점 퀴즈를 풀어본다.
+- **탐색(Explore)** — 오프라인 인터랙티브 마이크로월드에서 입력을 바꿔 변경된
+  동작을 직접 살펴본다.
 
-현재 활성 Codex 구독 세션 안에서 동작한다. API 키, 모델 설정, 별도 서버,
-추가 모델 호출이 필요 없다.
+**Alpha 범위:** staged, unstaged, 안전한 untracked 텍스트를 포함한, 완료된 로컬
+`HEAD -> working tree` 변경 하나만 다룬다. ChatGPT 구독으로 활성화한 Codex
+세션 안에서 동작하며 API 키, 모델 provider 설정, 별도 서버가 필요 없다.
 
-> **Alpha:** `v0.1.0-alpha`는 공개 dogfooding을 위한 첫 빌드다. 출시 후
-> 학습 결과에 따라 인터페이스와 artifact schema가 바뀔 수 있다.
+> **Alpha:** `v0.1.1-alpha`는 공개 dogfooding 빌드에 첫 사용 데모와 영문·한국어
+> 결과물을 추가한다. 인터페이스와 artifact schema는 계속 바뀔 수 있다.
 
 ## 설치
 
 Git, Node.js 20 이상, ChatGPT 구독으로 로그인한 Codex가 필요하다.
 
+Codex에 다음 요청을 복사해 넣는다.
+
+```text
+https://github.com/dkstm95/diff-scope에서 DiffScope v0.1.1-alpha를 설치해줘.
+diff-scope@diff-scope가 활성화됐는지 확인한 다음, 새 Codex 작업을 시작하라고 알려줘.
+아직 $diff는 실행하지 마.
+```
+
+또는 CLI를 사용한다.
+
 ```bash
-codex plugin marketplace add dkstm95/diff-scope --ref v0.1.0-alpha
+codex plugin marketplace add dkstm95/diff-scope --ref v0.1.1-alpha
 codex plugin add diff-scope@diff-scope
 ```
 
@@ -34,16 +60,16 @@ codex plugin add diff-scope@diff-scope
 
 ## 사용
 
-로컬 코드 작업 하나를 완료한 뒤 호출한다.
+로컬 코드 작업 하나를 완료하고 새 Codex 작업을 시작한 다음 자연어로 요청한다.
+
+```text
+방금 완료한 로컬 변경을 설명하고, 내 이해도를 퀴즈로 확인한 다음 직접 탐색하게 해줘.
+```
+
+또는 skill을 직접 호출한다.
 
 ```text
 $diff
-```
-
-자연어로 요청해도 된다.
-
-```text
-$diff로 완료된 변경을 설명하고, 퀴즈와 마이크로월드를 만들어줘.
 ```
 
 기본적으로 비공개 임시 디렉터리에 다음 결과를 만든다.

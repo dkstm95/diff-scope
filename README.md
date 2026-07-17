@@ -6,28 +6,56 @@
 
 <p align="center"><strong>Understand the code AI just finished—before you approve it.</strong></p>
 
-<p align="center"><a href="README.ko.md">한국어</a></p>
+<p align="center">
+  <a href="https://dkstm95.github.io/diff-scope/demo/"><strong>Try the zero-install demo</strong></a>
+  ·
+  <a href="README.ko.md">한국어</a>
+</p>
+
+Start in the browser with a synthetic example—no installation, repository, or
+API key required. The demo is published from `main`; its URL may return 404
+until the first GitHub Pages deployment completes.
+
+After installing, simply ask Codex:
+
+```text
+Explain the local change I just finished, then quiz me and make it explorable.
+```
 
 DiffScope turns one completed local code change into three connected learning
 artifacts:
 
-- an evidence-based explanation of the before-to-after behavior;
-- an auto-scored quiz that checks predictions and invariants;
-- an offline interactive microworld for exploring the changed behavior.
+- **Explain** — see the before-to-after behavior, causal path, decisions, risks,
+  and evidence;
+- **Check** — answer an auto-scored quiz about predictions and invariants;
+- **Explore** — vary inputs in an offline interactive microworld and inspect the
+  changed behavior.
 
-It runs inside your active Codex subscription session. There is no API key,
-model configuration, server, or additional model call.
+**Alpha scope:** one completed local `HEAD -> working tree` change, including
+staged, unstaged, and safe untracked text files. DiffScope runs inside your
+active Codex session with a ChatGPT subscription. It needs no API key, model
+provider setup, or separate server.
 
-> **Alpha:** `v0.1.0-alpha` is the first public dogfooding build. Interfaces and
-> artifact schemas may change from what we learn after release.
+> **Alpha:** `v0.1.1-alpha` adds the first-run demo and bilingual output to the
+> public dogfooding build. Interfaces and artifact schemas may still change.
 
 ## Install
 
 Requirements: Git, Node.js 20 or newer, and Codex signed in with a ChatGPT
 subscription.
 
+Copy this request into Codex:
+
+```text
+Install DiffScope v0.1.1-alpha from https://github.com/dkstm95/diff-scope.
+Verify that diff-scope@diff-scope is enabled, then tell me to start a new Codex task.
+Do not run $diff yet.
+```
+
+Or use the CLI:
+
 ```bash
-codex plugin marketplace add dkstm95/diff-scope --ref v0.1.0-alpha
+codex plugin marketplace add dkstm95/diff-scope --ref v0.1.1-alpha
 codex plugin add diff-scope@diff-scope
 ```
 
@@ -35,16 +63,16 @@ Start a new Codex task after installation so the new skill is loaded.
 
 ## Use
 
-Finish one local coding task, then invoke:
+Finish one local coding task, start a new Codex task, and ask naturally:
+
+```text
+Explain the local change I just finished, then quiz me and make it explorable.
+```
+
+Or invoke the skill directly:
 
 ```text
 $diff
-```
-
-Or ask naturally:
-
-```text
-Use $diff to explain my completed change, quiz me, and build a microworld.
 ```
 
 DiffScope writes a private temporary bundle by default:

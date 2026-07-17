@@ -397,6 +397,23 @@ test("redacts PEM blocks, tokens, credentials, and assignment values", () => {
   assert.ok(result.redactions >= 4);
 });
 
+test("keeps GitHub Actions id-token permission declarations", () => {
+  const permission = ["id", "token"].join("-");
+  const input = [
+    "permissions:",
+    `  ${permission}: write`,
+    `+  ${permission}: write`,
+    `  ${permission}: none`,
+  ].join("\n");
+  assert.deepEqual(redactSensitiveText(input), { text: input, redactions: 0 });
+
+  const credentialKey = ["pass", "word"].join("");
+  const suspicious = `  ${permission}: write # ${credentialKey}=visible-secret-value`;
+  const redacted = redactSensitiveText(suspicious);
+  assert.match(redacted.text, /\[REDACTED\]/u);
+  assert.doesNotMatch(redacted.text, /visible-secret-value/u);
+});
+
 test("parses only the supported CLI surface", () => {
   assert.deepEqual(
     parseArguments(["--root", "repo", "--output", "context.json"]),

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="DiffScope turns a completed local code change into an evidence-based explanation, a quiz, and an interactive before-and-after model.">
+    <meta name="theme-color" content="#5b5bd6">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="DiffScope — Understand the code AI just changed">
+    <meta property="og:description" content="Explore a real DiffScope output before installing the Codex plugin.">
+    <meta property="og:url" content="https://dkstm95.github.io/diff-scope/">
+    <meta name="twitter:card" content="summary">
+    <title>DiffScope — Understand the code AI just changed</title>
+    <link rel="icon" href="./assets/telescope.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./site.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="DiffScope home">
+        <img src="./assets/telescope.svg" width="40" height="40" alt="">
+        <span>DiffScope</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#safety">Safety</a>
+        <a href="https://github.com/dkstm95/diff-scope">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span></span> Codex plugin · public alpha</p>
+          <h1 id="hero-title">Understand the code AI just changed.</h1>
+          <p class="hero-subtitle">Before you approve it.</p>
+          <p class="hero-description">
+            Turn one completed local change into an evidence-based explanation,
+            a self-checking quiz, and an interactive before-and-after model.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="./demo/">Try the interactive demo</a>
+            <a class="button secondary" href="#install">Install with Codex</a>
+          </div>
+          <p class="trust-line">No API key · Offline result · MIT licensed</p>
+        </div>
+
+        <div class="product-preview" aria-label="Preview of a generated DiffScope result">
+          <div class="preview-bar">
+            <span></span><span></span><span></span>
+            <p>Representative DiffScope output</p>
+          </div>
+          <div class="preview-frame">
+            <iframe src="./demo/" title="Preview of the DiffScope explanation, quiz, and microworld" tabindex="-1" aria-hidden="true"></iframe>
+          </div>
+          <a class="preview-link" href="./demo/">Open the full interactive result <span aria-hidden="true">→</span></a>
+        </div>
+      </section>
+
+      <section class="value" aria-labelledby="value-title">
+        <div class="section-heading">
+          <p class="eyebrow">One change, three ways to understand it</p>
+          <h2 id="value-title">Move from reading a diff to building a mental model.</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <p class="feature-number">01</p>
+            <h3>Explain</h3>
+            <p>See what changed, why it changed, and each changed file's responsibility.</p>
+          </article>
+          <article>
+            <p class="feature-number">02</p>
+            <h3>Check</h3>
+            <p>Predict behavior and expose gaps with a short, auto-scored quiz.</p>
+          </article>
+          <article>
+            <p class="feature-number">03</p>
+            <h3>Explore</h3>
+            <p>Change inputs and compare the modeled behavior path before and after the change.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="how-it-works" class="workflow" aria-labelledby="workflow-title">
+        <div class="section-heading">
+          <p class="eyebrow">How it works</p>
+          <h2 id="workflow-title">Finish the change. Ask one question. Explore the result.</h2>
+        </div>
+        <ol>
+          <li>
+            <span>1</span>
+            <div>
+              <h3>Complete one local work unit</h3>
+              <p>Keep the working tree focused on one coherent change.</p>
+            </div>
+          </li>
+          <li>
+            <span>2</span>
+            <div>
+              <h3>Ask Codex to explain it</h3>
+              <p>Say “Help me understand the change I just finished.” No special syntax required.</p>
+            </div>
+          </li>
+          <li>
+            <span>3</span>
+            <div>
+              <h3>Use the bundle</h3>
+              <p>Read the explanation, answer the quiz, and change the microworld controls.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="demo-callout" aria-labelledby="demo-title">
+        <div>
+          <p class="eyebrow">Zero-install demo</p>
+          <h2 id="demo-title">See the actual renderer before trusting the pitch.</h2>
+          <p>
+            The demo is generated from a public synthetic change by the same validator and
+            renderer shipped in the plugin. The bundle itself makes no network requests once loaded.
+          </p>
+        </div>
+        <a class="button light" href="./demo/">Explore the sample change</a>
+      </section>
+
+      <section id="install" class="install" aria-labelledby="install-title">
+        <div class="section-heading">
+          <p class="eyebrow">Install</p>
+          <h2 id="install-title">Use your existing Codex subscription.</h2>
+          <p>No API key, model configuration, or separate AI account is required.</p>
+        </div>
+        <div class="install-grid">
+          <div>
+            <p class="step-label">Recommended · no terminal</p>
+            <p>Copy this request into a Codex task. Codex will inspect the public repository and ask before installing.</p>
+            <pre id="install-prompt"><code>Install DiffScope v0.1.1-alpha from https://github.com/dkstm95/diff-scope. Verify that diff-scope@diff-scope is enabled, then tell me to start a new Codex task. Do not run DiffScope yet.</code></pre>
+            <button class="button primary wide copy-button" type="button" data-copy-target="install-prompt">Copy install request</button>
+            <p class="small" id="copy-status" aria-live="polite">Paste it into Codex, send it, and approve the scoped installation.</p>
+          </div>
+          <div>
+            <p class="step-label">Terminal fallback</p>
+            <pre><code>codex plugin marketplace add dkstm95/diff-scope --ref v0.1.1-alpha
+codex plugin add diff-scope@diff-scope</code></pre>
+            <p class="small">Start a new Codex task after installation so the skill is loaded.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="safety" class="safety" aria-labelledby="safety-title">
+        <div class="section-heading">
+          <p class="eyebrow">Safety boundary</p>
+          <h2 id="safety-title">Bounded input. Fixed output runtime.</h2>
+        </div>
+        <div class="safety-grid">
+          <p><strong>Focused scope</strong><br>Only the completed local <code>HEAD → working tree</code> change is analyzed.</p>
+          <p><strong>Guardrails</strong><br>Common secret paths are blocked and suspected credentials are redacted.</p>
+          <p><strong>Offline result</strong><br>The generated HTML runs a fixed renderer with no network connection.</p>
+        </div>
+        <p class="boundary-note">
+          Repository contents in scope are processed by the active Codex service. Secret detection
+          reduces risk but is not a guarantee; review sensitive repositories before use.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <div class="brand footer-brand">
+        <img src="./assets/telescope.svg" width="36" height="36" alt="">
+        <span>DiffScope</span>
+      </div>
+      <p>Open source under the MIT License.</p>
+      <div>
+        <a href="https://github.com/dkstm95/diff-scope">Source</a>
+        <a href="https://github.com/dkstm95/diff-scope/issues">Support</a>
+        <a href="https://github.com/dkstm95/diff-scope/releases">Alpha releases</a>
+      </div>
+    </footer>
+  </body>
+</html>
