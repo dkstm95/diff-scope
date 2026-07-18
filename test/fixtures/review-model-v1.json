@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "locale": "ko",
   "title": "요청 식별자 검증 Hope Review",
   "changeRequest": {
     "provider": "github",
@@ -21,6 +22,28 @@
     },
     "commitCount": 2,
     "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "analysisPlan": {
+      "lineLimitPerPass": 4000,
+      "byteLimitPerPass": 65536,
+      "passes": [
+        {
+          "id": "pass-001",
+          "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "changedLines": 8,
+          "patchBytes": 256,
+          "patchIds": ["patch-0001"],
+          "paths": ["src/routing.mjs"]
+        },
+        {
+          "id": "pass-002",
+          "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "changedLines": 6,
+          "patchBytes": 256,
+          "patchIds": ["patch-0002"],
+          "paths": ["test/routing.test.mjs"]
+        }
+      ]
+    },
     "coverage": {
       "status": "complete",
       "discoveredFiles": 2,
@@ -30,7 +53,7 @@
       "additions": 12,
       "deletions": 2,
       "changedLines": 14,
-      "analyzedChangedLines": 14,
+      "explainableChangedLines": 14,
       "patchBytes": 512
     },
     "warnings": [],
@@ -51,6 +74,32 @@
         "additions": 5,
         "deletions": 1,
         "bodyState": "included"
+      }
+    ]
+  },
+  "analysisCoverage": {
+    "inspectionProtocolVersion": 1,
+    "summary": {
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "pageCount": 1,
+      "terminalReceipt": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "processedPasses": [
+      {
+        "id": "pass-001",
+        "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "pageCount": 1,
+        "terminalReceipt": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "summary": "라우터 변경에서 입력 검증과 정상 서비스 호출 경계를 확인했다.",
+        "evidenceIds": ["router-guard"]
+      },
+      {
+        "id": "pass-002",
+        "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "pageCount": 1,
+        "terminalReceipt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "summary": "회귀 테스트에서 400 응답과 저장소 미호출 계약을 확인했다.",
+        "evidenceIds": ["routing-test"]
       }
     ]
   },
@@ -94,6 +143,7 @@
       "id": "request-validation",
       "title": "요청 검증 흐름",
       "summary": "검증, 단락 반환, 정상 서비스 호출이 하나의 경로를 이룬다.",
+      "paths": ["src/routing.mjs"],
       "steps": [
         {
           "id": "read-id",
@@ -118,8 +168,41 @@
         }
       ],
       "evidenceIds": ["router-guard", "routing-test"]
+    },
+    {
+      "id": "regression-contract",
+      "title": "회귀 계약",
+      "summary": "테스트가 외부 응답과 내부 미호출 경계를 함께 고정한다.",
+      "paths": ["test/routing.test.mjs"],
+      "steps": [
+        {
+          "id": "assert-boundary",
+          "component": "라우팅 테스트",
+          "behavior": "400 응답과 저장소 호출 0회를 함께 검증한다.",
+          "basis": "observed",
+          "evidenceIds": ["routing-test"]
+        }
+      ],
+      "evidenceIds": ["routing-test"]
     }
   ],
+  "synthesis": {
+    "summary": {
+      "id": "system-synthesis",
+      "text": "라우터의 조기 종료와 테스트의 미호출 검증이 하나의 요청 경계 계약을 이룬다.",
+      "basis": "observed",
+      "evidenceIds": ["router-guard", "routing-test"]
+    },
+    "interactions": [
+      {
+        "id": "guard-to-contract",
+        "workstreamIds": ["request-validation", "regression-contract"],
+        "text": "라우터가 저장소 접근 전에 요청을 종료하고 테스트가 그 순서를 회귀 계약으로 고정한다.",
+        "basis": "observed",
+        "evidenceIds": ["router-guard", "routing-test"]
+      }
+    ]
+  },
   "literateDiff": [
     {
       "id": "router-literate",

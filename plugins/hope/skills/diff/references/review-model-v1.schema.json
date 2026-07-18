@@ -6,11 +6,14 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
+    "locale",
     "title",
     "changeRequest",
+    "analysisCoverage",
     "background",
     "overview",
     "workstreams",
+    "synthesis",
     "literateDiff",
     "visuals",
     "visualOmissionReason",
@@ -26,8 +29,10 @@
   ],
   "properties": {
     "schemaVersion": { "const": 1 },
+    "locale": { "enum": ["en", "ko"] },
     "title": { "$ref": "#/$defs/text" },
     "changeRequest": { "$ref": "#/$defs/changeRequestBinding" },
+    "analysisCoverage": { "$ref": "#/$defs/analysisCoverage" },
     "background": {
       "type": "array",
       "maxItems": 20,
@@ -59,6 +64,7 @@
       "maxItems": 12,
       "items": { "$ref": "#/$defs/workstream" }
     },
+    "synthesis": { "$ref": "#/$defs/synthesis" },
     "literateDiff": {
       "type": "array",
       "minItems": 1,
@@ -119,7 +125,7 @@
     "evidence": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 240,
+      "maxItems": 2048,
       "items": { "$ref": "#/$defs/evidence" }
     }
   },
@@ -141,6 +147,14 @@
     "fingerprint": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
+    },
+    "analysisPassId": {
+      "type": "string",
+      "pattern": "^pass-[0-9]{3}$"
+    },
+    "patchId": {
+      "type": "string",
+      "pattern": "^patch-[0-9]{4}$"
     },
     "relativePath": {
       "type": "string",
@@ -175,7 +189,7 @@
         "additions",
         "deletions",
         "changedLines",
-        "analyzedChangedLines",
+        "explainableChangedLines",
         "patchBytes"
       ],
       "properties": {
@@ -187,8 +201,48 @@
         "additions": { "type": "integer", "minimum": 0 },
         "deletions": { "type": "integer", "minimum": 0 },
         "changedLines": { "type": "integer", "minimum": 0 },
-        "analyzedChangedLines": { "type": "integer", "minimum": 0, "maximum": 4000 },
+        "explainableChangedLines": { "type": "integer", "minimum": 0 },
         "patchBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "analysisPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fingerprint", "changedLines", "patchBytes", "patchIds", "paths"],
+      "properties": {
+        "id": { "$ref": "#/$defs/analysisPassId" },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "changedLines": { "type": "integer", "minimum": 0, "maximum": 4000 },
+        "patchBytes": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "patchIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/patchId" }
+        },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        }
+      }
+    },
+    "analysisPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineLimitPerPass", "byteLimitPerPass", "passes"],
+      "properties": {
+        "lineLimitPerPass": { "type": "integer", "minimum": 1, "maximum": 4000 },
+        "byteLimitPerPass": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "passes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 999,
+          "items": { "$ref": "#/$defs/analysisPass" }
+        }
       }
     },
     "comparison": {
@@ -220,6 +274,7 @@
         "comparison",
         "commitCount",
         "fingerprint",
+        "analysisPlan",
         "coverage",
         "warnings",
         "exclusions",
@@ -241,6 +296,7 @@
         "comparison": { "$ref": "#/$defs/comparison" },
         "commitCount": { "type": "integer", "minimum": 1, "maximum": 250 },
         "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "analysisPlan": { "$ref": "#/$defs/analysisPlan" },
         "coverage": { "$ref": "#/$defs/coverage" },
         "warnings": {
           "type": "array",
@@ -249,13 +305,13 @@
         },
         "exclusions": {
           "type": "array",
-          "maxItems": 100,
+          "maxItems": 400,
           "items": { "$ref": "#/$defs/exclusion" }
         },
         "files": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 80,
+          "maxItems": 200,
           "items": { "$ref": "#/$defs/changeFile" }
         }
       }
@@ -301,11 +357,18 @@
     "workstream": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "summary", "steps", "evidenceIds"],
+      "required": ["id", "title", "summary", "paths", "steps", "evidenceIds"],
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "title": { "$ref": "#/$defs/text" },
         "summary": { "$ref": "#/$defs/text" },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
         "steps": {
           "type": "array",
           "minItems": 1,
@@ -324,6 +387,88 @@
           }
         },
         "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "processedPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "fingerprint",
+        "pageCount",
+        "terminalReceipt",
+        "summary",
+        "evidenceIds"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/analysisPassId" },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "pageCount": { "type": "integer", "minimum": 1, "maximum": 8192 },
+        "terminalReceipt": { "$ref": "#/$defs/fingerprint" },
+        "summary": { "$ref": "#/$defs/text" },
+        "evidenceIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
+      }
+    },
+    "inspectionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fingerprint", "pageCount", "terminalReceipt"],
+      "properties": {
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "pageCount": { "type": "integer", "minimum": 1, "maximum": 8192 },
+        "terminalReceipt": { "$ref": "#/$defs/fingerprint" }
+      }
+    },
+    "analysisCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inspectionProtocolVersion", "summary", "processedPasses"],
+      "properties": {
+        "inspectionProtocolVersion": { "const": 1 },
+        "summary": { "$ref": "#/$defs/inspectionSummary" },
+        "processedPasses": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 999,
+          "items": { "$ref": "#/$defs/processedPass" }
+        }
+      }
+    },
+    "synthesisInteraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "workstreamIds", "text", "basis", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "workstreamIds": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "text": { "$ref": "#/$defs/text" },
+        "basis": { "enum": ["declared", "observed", "inferred", "unknown"] },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "synthesis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "interactions"],
+      "properties": {
+        "summary": { "$ref": "#/$defs/claim" },
+        "interactions": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/synthesisInteraction" }
+        }
       }
     },
     "literateDiff": {

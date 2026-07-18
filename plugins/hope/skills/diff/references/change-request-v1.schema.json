@@ -26,6 +26,7 @@
     "commits",
     "files",
     "patches",
+    "analysisPlan",
     "coverage",
     "exclusions",
     "warnings",
@@ -90,7 +91,7 @@
     "files": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 80,
+      "maxItems": 200,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -132,14 +133,76 @@
     },
     "patches": {
       "type": "array",
-      "maxItems": 80,
+      "minItems": 1,
+      "maxItems": 1024,
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["path", "text"],
+        "required": [
+          "id",
+          "passId",
+          "path",
+          "startLine",
+          "endLine",
+          "additions",
+          "deletions",
+          "text"
+        ],
         "properties": {
+          "id": { "type": "string", "pattern": "^patch-[0-9]{4}$" },
+          "passId": { "type": "string", "pattern": "^pass-[0-9]{3}$" },
           "path": { "$ref": "#/$defs/relativePath" },
-          "text": { "type": "string", "maxLength": 262144 }
+          "startLine": { "type": "integer", "minimum": 1 },
+          "endLine": { "type": "integer", "minimum": 1 },
+          "additions": { "$ref": "#/$defs/count" },
+          "deletions": { "$ref": "#/$defs/count" },
+          "text": { "type": "string", "minLength": 1, "maxLength": 65536 }
+        }
+      }
+    },
+    "analysisPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineLimitPerPass", "byteLimitPerPass", "passes"],
+      "properties": {
+        "lineLimitPerPass": { "type": "integer", "minimum": 1, "maximum": 4000 },
+        "byteLimitPerPass": { "type": "integer", "minimum": 1, "maximum": 65536 },
+        "passes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 999,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "fingerprint",
+              "changedLines",
+              "patchBytes",
+              "patchIds",
+              "paths"
+            ],
+            "properties": {
+              "id": { "type": "string", "pattern": "^pass-[0-9]{3}$" },
+              "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "changedLines": { "type": "integer", "minimum": 0, "maximum": 4000 },
+              "patchBytes": { "type": "integer", "minimum": 1, "maximum": 65536 },
+              "patchIds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 1024,
+                "uniqueItems": true,
+                "items": { "type": "string", "pattern": "^patch-[0-9]{4}$" }
+              },
+              "paths": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 200,
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/relativePath" }
+              }
+            }
+          }
         }
       }
     },
@@ -155,7 +218,7 @@
         "additions",
         "deletions",
         "changedLines",
-        "analyzedChangedLines",
+        "explainableChangedLines",
         "patchBytes"
       ],
       "properties": {
@@ -167,13 +230,13 @@
         "additions": { "$ref": "#/$defs/count" },
         "deletions": { "$ref": "#/$defs/count" },
         "changedLines": { "$ref": "#/$defs/count" },
-        "analyzedChangedLines": { "type": "integer", "minimum": 0, "maximum": 4000 },
+        "explainableChangedLines": { "type": "integer", "minimum": 0 },
         "patchBytes": { "$ref": "#/$defs/count" }
       }
     },
     "exclusions": {
       "type": "array",
-      "maxItems": 100,
+      "maxItems": 400,
       "items": {
         "type": "object",
         "additionalProperties": false,

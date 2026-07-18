@@ -12,11 +12,16 @@ import {
 } from "../plugins/hope/skills/diff/scripts/lib/render-review.mjs";
 import {
   ChangeRequestBindingError,
+  MAX_REVIEW_MODEL_BYTES,
   ReviewValidationError,
   validateReviewAgainstChangeRequest,
   validateReviewModel,
 } from "../plugins/hope/skills/diff/scripts/lib/validate-review.mjs";
 import { collectSecretIssues } from "../plugins/hope/skills/diff/scripts/lib/safety.mjs";
+import {
+  buildInspectionPages,
+  inspectionCompletion,
+} from "../plugins/hope/skills/diff/scripts/lib/inspection-pages.mjs";
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(testDirectory, "fixtures", "review-model-v1.json");
@@ -34,7 +39,7 @@ function mode(status) {
 }
 
 function changeRequestForReview(review) {
-  return {
+  const context = {
     schemaVersion: 1,
     provider: review.changeRequest.provider,
     host: "github.com",
@@ -68,7 +73,13 @@ function changeRequestForReview(review) {
     files: clone(review.changeRequest.files),
     patches: [
       {
+        id: "patch-0001",
+        passId: "pass-001",
         path: "src/routing.mjs",
+        startLine: 1,
+        endLine: 6,
+        additions: 7,
+        deletions: 1,
         text:
           "diff --git a/src/routing.mjs b/src/routing.mjs\n" +
           "--- a/src/routing.mjs\n+++ b/src/routing.mjs\n@@ -1,3 +1,6 @@\n" +
@@ -78,7 +89,13 @@ function changeRequestForReview(review) {
           " return service.load(request.id);\n",
       },
       {
+        id: "patch-0002",
+        passId: "pass-002",
         path: "test/routing.test.mjs",
+        startLine: 7,
+        endLine: 9,
+        additions: 5,
+        deletions: 1,
         text:
           "diff --git a/test/routing.test.mjs b/test/routing.test.mjs\n" +
           "--- a/test/routing.test.mjs\n+++ b/test/routing.test.mjs\n@@ -7,2 +7,3 @@\n" +
@@ -86,17 +103,75 @@ function changeRequestForReview(review) {
           "+assert.equal(repository.calls, 0);\n",
       },
     ],
+    analysisPlan: clone(review.changeRequest.analysisPlan),
     coverage: clone(review.changeRequest.coverage),
     exclusions: clone(review.changeRequest.exclusions),
     warnings: clone(review.changeRequest.warnings),
     fingerprint: review.changeRequest.fingerprint,
   };
+  const summary = inspectionCompletion(buildInspectionPages(context, { kind: "summary" }));
+  review.analysisCoverage.inspectionProtocolVersion = 1;
+  review.analysisCoverage.summary = {
+    fingerprint: context.fingerprint,
+    ...summary,
+  };
+  review.analysisCoverage.processedPasses.forEach((processedPass) => {
+    Object.assign(
+      processedPass,
+      inspectionCompletion(
+        buildInspectionPages(context, { kind: "pass", passId: processedPass.id }),
+      ),
+    );
+  });
+  return context;
 }
 
 test("validates the complete ReviewModelV1 fixture", async () => {
   const review = await fixture();
   assert.equal(validateReviewModel(review), review);
   assert.equal(validateReviewAgainstChangeRequest(review, changeRequestForReview(review)), review);
+});
+
+test("requires an explicit supported review locale", async (t) => {
+  const review = await fixture();
+
+  await t.test("missing locale", () => {
+    const candidate = clone(review);
+    delete candidate.locale;
+    assert.throws(() => validateReviewModel(candidate), /\$\.locale is required/u);
+  });
+
+  for (const value of [null, "ja", "ko-KR"]) {
+    await t.test(`unsupported locale ${String(value)}`, () => {
+      const candidate = clone(review);
+      candidate.locale = value;
+      assert.throws(() => validateReviewModel(candidate), /\$\.locale must be en or ko/u);
+    });
+  }
+});
+
+test("rejects a ReviewModelV1 that exceeds the renderer input budget", async () => {
+  const review = await fixture();
+  const excerpt = "review-context-".repeat(400).slice(0, 3999);
+  for (let index = 0; index < 1_100; index += 1) {
+    review.evidence.push({
+      id: `oversized-${index}`,
+      source: "pr-description",
+      label: `Oversized evidence ${index}`,
+      path: null,
+      side: null,
+      startLine: null,
+      endLine: null,
+      commitSha: null,
+      excerpt,
+    });
+  }
+
+  assert.ok(Buffer.byteLength(JSON.stringify(review)) > MAX_REVIEW_MODEL_BYTES);
+  assert.throws(
+    () => validateReviewModel(review),
+    new RegExp(`at most ${MAX_REVIEW_MODEL_BYTES} serialized bytes`, "u"),
+  );
 });
 
 test("binds every mirrored ChangeRequest field exactly", async (t) => {
@@ -118,6 +193,10 @@ test("binds every mirrored ChangeRequest field exactly", async (t) => {
     comparison: { kind: "merge-base-to-head", fromSha: "8".repeat(40), toSha: "7".repeat(40) },
     commitCount: 3,
     fingerprint: "b".repeat(64),
+    analysisPlan: {
+      ...clone(source.analysisPlan),
+      lineLimitPerPass: source.analysisPlan.lineLimitPerPass - 1,
+    },
     coverage: { ...source.coverage, changedLines: source.coverage.changedLines + 1 },
     warnings: ["bounded warning"],
     exclusions: [{ path: "large.txt", reason: "size limit" }],
@@ -146,6 +225,180 @@ test("refuses blocked Change Request coverage", async () => {
   );
 });
 
+test("requires every bounded analysis pass to be processed once, in order, and with grounded evidence", async (t) => {
+  const review = await fixture();
+
+  await t.test("missing pass", () => {
+    const candidate = clone(review);
+    candidate.analysisCoverage.processedPasses.pop();
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /must contain every planned analysis pass exactly once and in order/u,
+    );
+  });
+
+  await t.test("reordered pass", () => {
+    const candidate = clone(review);
+    candidate.analysisCoverage.processedPasses.reverse();
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /\.id must match .*analysisPlan\.passes/u,
+    );
+  });
+
+  await t.test("mismatched pass fingerprint", () => {
+    const candidate = clone(review);
+    candidate.analysisCoverage.processedPasses[0].fingerprint = "d".repeat(64);
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /\.fingerprint must match .*analysisPlan\.passes/u,
+    );
+  });
+
+  await t.test("non-code pass evidence", () => {
+    const candidate = clone(review);
+    candidate.analysisCoverage.processedPasses[0].evidenceIds = ["pr-description"];
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /must cite code or test evidence from its planned paths/u,
+    );
+  });
+
+  await t.test("evidence from another pass", () => {
+    const candidate = clone(review);
+    candidate.analysisCoverage.processedPasses[0].evidenceIds = ["routing-test"];
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /must cite code or test evidence from its planned paths/u,
+    );
+  });
+
+  await t.test("excerpt must occur in a fragment belonging to that pass", () => {
+    const context = changeRequestForReview(review);
+    context.patches[0].passId = "pass-002";
+    assert.throws(
+      () => validateReviewAgainstChangeRequest(review, context),
+      /patch fragment belonging to that pass/u,
+    );
+  });
+
+    await t.test("summary completion attestation must bind the exact deterministic view", () => {
+    const context = changeRequestForReview(review);
+    review.analysisCoverage.summary.terminalReceipt = "f".repeat(64);
+    assert.throws(
+      () => validateReviewAgainstChangeRequest(review, context),
+      /summary\.terminalReceipt does not match/u,
+    );
+  });
+
+    await t.test("pass completion attestation must bind the exact deterministic view", () => {
+    const context = changeRequestForReview(review);
+    review.analysisCoverage.processedPasses[0].pageCount += 1;
+    review.analysisCoverage.processedPasses[1].terminalReceipt = "f".repeat(64);
+    assert.throws(
+      () => validateReviewAgainstChangeRequest(review, context),
+      /pageCount does not match|terminalReceipt does not match/u,
+    );
+  });
+});
+
+test("validates bounded analysis-plan summaries against collection totals", async (t) => {
+  const review = await fixture();
+
+  await t.test("pass line limit", () => {
+    const candidate = clone(review);
+    candidate.changeRequest.analysisPlan.passes[0].changedLines = 4001;
+    candidate.changeRequest.coverage.explainableChangedLines += 3993;
+    assert.throws(() => validateReviewModel(candidate), /cannot exceed .*lineLimitPerPass/u);
+  });
+
+  await t.test("explainable-line total", () => {
+    const candidate = clone(review);
+    candidate.changeRequest.coverage.explainableChangedLines += 1;
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /analysisPlan changed lines must equal .*coverage\.explainableChangedLines/u,
+    );
+  });
+
+  await t.test("patch-byte total", () => {
+    const candidate = clone(review);
+    candidate.changeRequest.coverage.patchBytes += 1;
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /analysisPlan patch bytes must equal .*coverage\.patchBytes/u,
+    );
+  });
+
+  await t.test("duplicate planned patch", () => {
+    const candidate = clone(review);
+    candidate.changeRequest.analysisPlan.passes[1].patchIds = ["patch-0001"];
+    assert.throws(() => validateReviewModel(candidate), /duplicates patch id/u);
+  });
+
+  await t.test("unknown planned path", () => {
+    const candidate = clone(review);
+    candidate.changeRequest.analysisPlan.passes[0].paths = ["src/not-changed.mjs"];
+    assert.throws(() => validateReviewModel(candidate), /must reference a changed file/u);
+  });
+});
+
+test("links overlapping workstreams and grounds cross-workstream synthesis", async (t) => {
+  const review = await fixture();
+
+  await t.test("overlapping workstream paths are allowed", () => {
+    const candidate = clone(review);
+    candidate.workstreams[1].paths.push("src/routing.mjs");
+    assert.doesNotThrow(() => validateReviewModel(candidate));
+  });
+
+  await t.test("unknown workstream path", () => {
+    const candidate = clone(review);
+    candidate.workstreams[0].paths = ["src/not-changed.mjs"];
+    assert.throws(() => validateReviewModel(candidate), /workstreams\[0\]\.paths\[0\] must reference a changed file/u);
+  });
+
+  await t.test("duplicate workstream id", () => {
+    const candidate = clone(review);
+    candidate.workstreams[1].id = candidate.workstreams[0].id;
+    assert.throws(() => validateReviewModel(candidate), /duplicates workstream id/u);
+  });
+
+  await t.test("interaction needs two unique workstreams", () => {
+    const candidate = clone(review);
+    candidate.synthesis.interactions[0].workstreamIds = ["request-validation"];
+    assert.throws(() => validateReviewModel(candidate), /must contain between 2 and 12 items/u);
+  });
+
+  await t.test("interaction references known workstreams", () => {
+    const candidate = clone(review);
+    candidate.synthesis.interactions[0].workstreamIds[1] = "unknown-stream";
+    assert.throws(() => validateReviewModel(candidate), /references unknown workstream/u);
+  });
+
+  await t.test("interaction grounds every connected workstream", () => {
+    const candidate = clone(review);
+    candidate.synthesis.interactions[0].evidenceIds = ["router-guard"];
+    assert.throws(
+      () => validateReviewModel(candidate),
+      /must ground each connected workstream/u,
+    );
+  });
+
+  await t.test("observed synthesis cites code or test", () => {
+    const candidate = clone(review);
+    candidate.synthesis.summary.evidenceIds = ["pr-description"];
+    assert.throws(() => validateReviewModel(candidate), /synthesis\.summary\.evidenceIds must cite code or test evidence/u);
+  });
+
+  await t.test("unknown synthesis requires an author question", () => {
+    const candidate = clone(review);
+    candidate.synthesis.interactions[0].basis = "unknown";
+    candidate.synthesis.interactions[0].evidenceIds = [];
+    assert.throws(() => validateReviewModel(candidate), /an unknown claim requires an author question/u);
+  });
+});
+
 test("binds code, test, commit, and selected excerpt evidence", async (t) => {
   const review = await fixture();
 
@@ -158,7 +411,7 @@ test("binds code, test, commit, and selected excerpt evidence", async (t) => {
   await t.test("metadata-only changed path", () => {
     const candidate = clone(review);
     candidate.changeRequest.files[0].bodyState = "binary";
-    assert.throws(() => validateReviewModel(candidate), /included or redacted body/);
+    assert.throws(() => validateReviewModel(candidate), /included body/);
   });
 
   await t.test("missing collected patch", () => {
@@ -283,7 +536,7 @@ test("keeps the literate diff selective, unique, and evidence-backed", async (t)
   await t.test("metadata-only file", () => {
     const candidate = clone(review);
     candidate.changeRequest.files[0].bodyState = "generated-or-lockfile";
-    assert.throws(() => validateReviewModel(candidate), /included or redacted body/);
+    assert.throws(() => validateReviewModel(candidate), /included body/);
   });
 
   await t.test("unrelated-file evidence", () => {
@@ -291,7 +544,7 @@ test("keeps the literate diff selective, unique, and evidence-backed", async (t)
     candidate.literateDiff[0].changes[0].evidenceIds = ["routing-test"];
     assert.throws(
       () => validateReviewModel(candidate),
-      /must cite code or test evidence for src\/routing\.mjs/u,
+      /must cite code or test evidence for its selected file/u,
     );
   });
 });
@@ -406,6 +659,10 @@ test("rejects high-confidence secrets anywhere in the ReviewModel", async (t) =>
     ["Bearer", "Bearer abcdefghijklmnopqrstuvwxyz"],
     ["quoted JSON assignment", '{"private_key":"super-secret-material"}'],
     ["bracketed assignment", 'config["client_secret"] = "literal-client-material"'],
+    [
+      "encoded bracketed triple-quoted assignment",
+      'config["pass\\u0077ord"] = """\nFAKE_ENCODED_TRIPLE_SECRET_MATERIAL\n"""',
+    ],
   ];
   for (const [name, secret] of cases) {
     await t.test(name, async () => {
@@ -419,10 +676,44 @@ test("rejects high-confidence secrets anywhere in the ReviewModel", async (t) =>
   }
 });
 
+test("never echoes credentials from invalid ReviewModel identifiers or property keys", async (t) => {
+  const secret = "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456";
+
+  await t.test("dangling identifier", async () => {
+    const review = await fixture();
+    review.quiz.questions[0].evidenceIds[0] = secret;
+    assert.throws(
+      () => validateReviewModel(review),
+      (error) => {
+        assert.ok(error instanceof ReviewValidationError);
+        assert.ok(!error.message.includes(secret));
+        assert.ok(!error.issues.join("\n").includes(secret));
+        return /suspected|redacted/u.test(error.message);
+      },
+    );
+  });
+
+  await t.test("unsupported property key", async () => {
+    const review = await fixture();
+    review[secret] = secret;
+    assert.throws(
+      () => validateReviewModel(review),
+      (error) => {
+        assert.ok(error instanceof ReviewValidationError);
+        assert.ok(!error.message.includes(secret));
+        assert.ok(!error.issues.join("\n").includes(secret));
+        return /suspected|redacted/u.test(error.message);
+      },
+    );
+  });
+});
+
 test("distinguishes secret-detector declarations from credential assignments", () => {
   assert.deepEqual(collectSecretIssues("const SECRET_PATTERNS = ["), []);
   assert.deepEqual(collectSecretIssues("const passwordRules = {"), []);
   assert.deepEqual(collectSecretIssues("const CLIENT_SECRET_REGEXES = ["), []);
+  assert.deepEqual(collectSecretIssues('password = "" ;'), []);
+  assert.deepEqual(collectSecretIssues('password = "example"; # fixture'), []);
 
   for (const assignment of [
     "const SECRET = [",
@@ -435,6 +726,12 @@ test("distinguishes secret-detector declarations from credential assignments", (
     "SECRET_VALUE = [",
     "SECRET_CLIENT_KEY = {",
     'SECRET_PATTERNS = ["literal-client-material"]',
+    'config["pass\\u0077ord"] = "" +\n"FAKE_CONCATENATED_SECRET_MATERIAL"',
+    'config["pass\\u0077ord"] = "" || "FAKE_FALLBACK_SECRET_MATERIAL"',
+    'config["pass\\u0077ord"] = "" // benign-looking comment\n|| "FAKE_MULTILINE_FALLBACK_SECRET_MATERIAL"',
+    'config.password ??= "FAKE_NULLISH_ASSIGNMENT_SECRET_MATERIAL"',
+    'config.password ||= "FAKE_LOGICAL_ASSIGNMENT_SECRET_MATERIAL"',
+    'password += "FAKE_COMPOUND_SECRET_MATERIAL"',
   ]) {
     assert.match(collectSecretIssues(assignment).join("\n"), /secret assignment/u);
   }
@@ -447,16 +744,41 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   const second = renderReviewHtml(review);
   assert.equal(first, second);
   assert.match(first, /Hope · diff/);
-  assert.match(first, /Review snapshot/);
-  assert.match(first, /Questions for the author/);
-  assert.match(first, /Literate diff/);
-  assert.match(first, /Understanding quiz/);
-  assert.match(first, /Microworld/);
-  assert.match(first, /Consider preserving/);
+  assert.match(first, /<html lang="ko">/u);
+  assert.match(first, /<title>Hope 리뷰<\/title>/u);
+  assert.match(first, /<h2 id="overview-heading">무엇이 바뀌었나<\/h2>/u);
+  assert.match(first, /<h2 id="workstream-heading">어떻게 동작하나<\/h2>/u);
+  assert.match(first, /<h2 id="review-focus-heading">위험, 결정, 확인할 질문<\/h2>/u);
+  assert.match(first, /<h2 id="literate-heading">핵심 코드 변경<\/h2>/u);
+  assert.match(first, /<h2 id="microworld-heading">동작 실험<\/h2>/u);
+  assert.match(first, /<h2 id="quiz-heading">이해도 확인<\/h2>/u);
+  assert.match(first, /<h2 id="details-heading">분석 세부 정보<\/h2>/u);
+  assert.match(first, /class="technical-details"><summary>분석한 PR 버전과 세부 정보 보기<\/summary>/u);
+  assert.match(first, /"observed":"코드에서 확인"/u);
+  assert.match(first, /"not-run":"실행 안 함"/u);
+  assert.match(first, /"generated-or-lockfile":"생성\/잠금 파일"/u);
+  assert.match(first, /id="workstream-navigation"/);
+  assert.match(first, /workstreamTarget/);
+  assert.match(first, /return "workstream-card-" \+ id/u);
+  assert.match(first, /synthesis-interactions/);
   assert.match(first, /Base SHA/);
   assert.match(first, /Merge-base SHA/);
   assert.match(first, /Head SHA/);
-  assert.match(first, /PR title/);
+  assert.match(first, /PR 제목/);
+  const header = first.slice(first.indexOf("<header>"), first.indexOf("</header>"));
+  assert.match(header, /id="review-context"/u);
+  assert.doesNotMatch(header, /Base SHA|Merge-base SHA|Head SHA|Fingerprint|분석 식별값/u);
+  const sectionOrder = [
+    'id="overview"',
+    'id="workstreams"',
+    'id="review-focus"',
+    'id="literate-diff"',
+    'id="microworld-section"',
+    'id="quiz"',
+    'id="details"',
+  ].map((marker) => first.indexOf(marker));
+  assert.ok(sectionOrder.every((position) => position >= 0));
+  assert.deepEqual(sectionOrder, [...sectionOrder].sort((left, right) => left - right));
   assert.match(first, /Content-Security-Policy/);
   assert.match(first, /default-src 'none'/);
   assert.match(first, /connect-src 'none'/);
@@ -466,10 +788,13 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /document\.createElement/);
   assert.match(first, /\.textContent/);
   assert.match(first, /file\.previousPath/u);
+  assert.match(first, /passIdsByPath/u);
+  assert.match(first, /workstreamIdsByPath/u);
+  assert.match(first, /processedPass\.summary/u);
   assert.match(first, /correctOptionIds/);
   assert.match(first, /selected\.size === expected\.size/);
   assert.match(first, /candidate\.when\.find/);
-  assert.match(first, /This is a bounded explanatory model/);
+  assert.match(first, /이 기능은 이해를 돕기 위한 제한된 모델이며 프로젝트 코드를 실행하지 않습니다/u);
   assert.doesNotMatch(first, /<\/script><script>alert\('unsafe'\)/);
   assert.match(first, /\\u003c\/script\\u003e\\u003cscript\\u003e/);
   assert.match(first, /\\u0026/);
@@ -478,6 +803,18 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.doesNotMatch(first, /\bfetch\s*\(/);
   assert.doesNotMatch(first, /XMLHttpRequest|WebSocket|EventSource|new\s+Function/);
   assert.doesNotMatch(first, /<script[^>]+src=|<link[^>]+href=|<img[^>]+src=/);
+});
+
+test("renders the fixed interface in the selected language", async () => {
+  const review = await fixture();
+  review.locale = "en";
+  const html = renderReviewHtml(review);
+  assert.match(html, /<html lang="en">/u);
+  assert.match(html, /<title>Hope Review<\/title>/u);
+  assert.match(html, /<h2 id="overview-heading">What changed<\/h2>/u);
+  assert.match(html, /<h2 id="microworld-heading">Try the behavior<\/h2>/u);
+  assert.match(html, /<h2 id="quiz-heading">Check your understanding<\/h2>/u);
+  assert.match(html, /<h2 id="details-heading">Analysis details<\/h2>/u);
 });
 
 test("serializes selected excerpts as inert data and renders them only with textContent", async () => {
@@ -499,7 +836,7 @@ test("writes one private Hope Review file by default", async (t) => {
   assert.equal(basename(result.file), "hope-review.html");
   assert.match(basename(dirname(result.file)), /^hope-review-/u);
   assert.deepEqual(await readdir(dirname(result.file)), ["hope-review.html"]);
-  assert.match(await readFile(result.file, "utf8"), /<title>Hope Review<\/title>/);
+  assert.match(await readFile(result.file, "utf8"), /<title>Hope 리뷰<\/title>/u);
   if (process.platform !== "win32") {
     assert.equal(mode(await stat(dirname(result.file))), 0o700);
     assert.equal(mode(await stat(result.file)), 0o600);

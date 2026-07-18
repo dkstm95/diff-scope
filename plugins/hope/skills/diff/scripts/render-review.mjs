@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { Buffer } from "node:buffer";
-import { constants as fsConstants } from "node:fs";
+import { constants as fsConstants, realpathSync } from "node:fs";
 import { lstat, open, rmdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import process from "node:process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import {
   SnapshotChangedError,
@@ -16,13 +16,17 @@ import {
   validateChangeRequest,
 } from "./collect-change-request.mjs";
 import { writeReviewHtml } from "./lib/render-review.mjs";
-import { validateReviewAgainstChangeRequest } from "./lib/validate-review.mjs";
+import {
+  MAX_REVIEW_MODEL_BYTES,
+  validateReviewAgainstChangeRequest,
+} from "./lib/validate-review.mjs";
 
-const MAX_REVIEW_BYTES = 4 * 1024 * 1024;
-const MAX_CONTEXT_BYTES = 2 * 1024 * 1024;
+export const MAX_CONTEXT_BYTES = 4 * 1024 * 1024;
+export const MAX_REVIEW_FILE_BYTES = MAX_REVIEW_MODEL_BYTES * 2;
 
 function usage() {
   return `Usage:
+  node render-review.mjs --input <review-model.json> --context <change-request.json> --validate-only
   node render-review.mjs --input <review-model.json> --context <change-request.json> [--output <new-file.html>] [--cleanup]
   node render-review.mjs --context <change-request.json> --cleanup
 
@@ -30,6 +34,8 @@ Options:
   --input    Transient ReviewModelV1 JSON generated in the active AI session.
   --context  Transient ChangeRequestV1 JSON produced by collect-change-request.mjs.
   --output   Export to a new HTML file. Existing paths are never overwritten.
+  --validate-only
+             Validate and rebind the review without rendering or removing inputs.
   --cleanup  Remove Hope-owned transient JSON after success, failure, or an
              interrupted model-generation step when --input is omitted.
   --help     Show this help message.
@@ -41,6 +47,7 @@ export function parseRenderArguments(argumentsList) {
     input: undefined,
     context: undefined,
     output: undefined,
+    validateOnly: false,
     cleanup: false,
     cleanupOnly: false,
     help: false,
@@ -57,6 +64,13 @@ export function parseRenderArguments(argumentsList) {
         throw new Error("--cleanup may be provided only once");
       }
       parsed.cleanup = true;
+      continue;
+    }
+    if (argument === "--validate-only") {
+      if (parsed.validateOnly) {
+        throw new Error("--validate-only may be provided only once");
+      }
+      parsed.validateOnly = true;
       continue;
     }
     if (!["--input", "--context", "--output"].includes(argument)) {
@@ -85,6 +99,12 @@ export function parseRenderArguments(argumentsList) {
       throw new Error("--output is not allowed for cleanup-only mode");
     }
     parsed.cleanupOnly = true;
+  }
+  if (!parsed.help && parsed.validateOnly && parsed.cleanup) {
+    throw new Error("--validate-only cannot be combined with --cleanup");
+  }
+  if (!parsed.help && parsed.validateOnly && parsed.output !== undefined) {
+    throw new Error("--output is not allowed with --validate-only");
   }
   if (
     !parsed.help &&
@@ -145,8 +165,8 @@ export async function loadJsonDocument(inputPath, label, maximumBytes) {
     });
     try {
       return JSON.parse(source);
-    } catch (error) {
-      throw new Error(`${label} is not valid JSON: ${error.message}`, { cause: error });
+    } catch {
+      throw new Error(`${label} is not valid JSON.`);
     }
   } finally {
     await handle.close();
@@ -308,7 +328,7 @@ export async function main(
     const review = await loadJsonDocument(
       parsed.input,
       "ReviewModelV1 input",
-      MAX_REVIEW_BYTES,
+      MAX_REVIEW_FILE_BYTES,
     );
     const storedContext = await loadJsonDocument(
       parsed.context,
@@ -322,6 +342,13 @@ export async function main(
       await collect({ url: storedContext.url }),
     );
     validateReviewAgainstChangeRequest(review, liveContext);
+
+    if (parsed.validateOnly) {
+      const finalSnapshot = await currentSnapshot({ url: storedContext.url });
+      assertSameSnapshot(liveContext, finalSnapshot);
+      process.stdout.write("Hope review validation passed.\n");
+      return { validated: true };
+    }
 
     result = await write(review, {
       changeRequest: liveContext,
@@ -376,7 +403,15 @@ export async function main(
 }
 
 const invokedPath = process.argv[1];
-if (invokedPath && import.meta.url === pathToFileURL(invokedPath).href) {
+let isEntrypoint = false;
+if (invokedPath) {
+  try {
+    isEntrypoint = realpathSync(fileURLToPath(import.meta.url)) === realpathSync(invokedPath);
+  } catch {
+    isEntrypoint = false;
+  }
+}
+if (isEntrypoint) {
   main().catch((error) => {
     process.stderr.write(`${error.message}\n`);
     process.exitCode = 1;

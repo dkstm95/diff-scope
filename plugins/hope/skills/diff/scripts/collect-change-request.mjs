@@ -4,6 +4,7 @@ import { Buffer } from "node:buffer";
 import { spawn } from "node:child_process";
 import console from "node:console";
 import { createHash } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { chmod, lstat, mkdtemp, open, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -16,18 +17,23 @@ import { canonicalizeJson, collectSecretIssues } from "./lib/safety.mjs";
 
 const FINGERPRINT_DOMAIN = "hope:change-request:v1\0";
 const SNAPSHOT_FINGERPRINT_DOMAIN = "hope:change-request-snapshot:v1\0";
+const ANALYSIS_PASS_FINGERPRINT_DOMAIN = "hope:analysis-pass:v1\0";
 const GH_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
 const SHA_PATTERN = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
 const OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/u;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]{1,100}$/u;
 const WINDOWS_DRIVE_PATTERN = /^[A-Za-z]:/u;
 const URL_SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
+const MAX_ANALYSIS_PASSES = 999;
 
 export const DEFAULT_LIMITS = Object.freeze({
-  maxFiles: 80,
-  changedLines: 4_000,
-  filePatchBytes: 64 * 1024,
-  totalPatchBytes: 256 * 1024,
+  maxFiles: 200,
+  passChangedLines: 4_000,
+  totalChangedLines: 20_000,
+  passPatchBytes: 64 * 1024,
+  filePatchBytes: 256 * 1024,
+  totalPatchBytes: 768 * 1024,
+  summaryBytes: 128 * 1024,
   descriptionBytes: 32 * 1024,
   timeoutMs: 30_000,
 });
@@ -81,6 +87,7 @@ const OUTPUT_KEYS = Object.freeze([
   "commits",
   "files",
   "patches",
+  "analysisPlan",
   "coverage",
   "exclusions",
   "warnings",
@@ -160,6 +167,12 @@ function safePath(value) {
   return isSafeRelativePath(value) ? value : pathPlaceholder(value);
 }
 
+function compareCanonicalText(left, right) {
+  const leftText = String(left);
+  const rightText = String(right);
+  return leftText < rightText ? -1 : leftText > rightText ? 1 : 0;
+}
+
 function classifyPath(filePath) {
   if (!isSafeRelativePath(filePath)) {
     return "unsafe-path";
@@ -198,12 +211,51 @@ function classifyPath(filePath) {
   return null;
 }
 
+function unescapedDelimiterIndex(value, delimiter, startIndex = 0) {
+  let escaped = false;
+  for (let index = startIndex; index < value.length; index += 1) {
+    const character = value[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (character === delimiter) return index;
+  }
+  return -1;
+}
+
+function sensitiveMultilineDelimiter(value) {
+  const match =
+    /(?:api[_-]?key|secret(?:[_-]?access)?[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|refresh[_-]?token|password|passwd|pwd|secret|token)["'`\]]*\s*(?::|=(?!=|>))\s*(["'`])/iu
+      .exec(value);
+  if (!match) return null;
+  const delimiter = match[1];
+  const openerIndex = match.index + match[0].lastIndexOf(delimiter);
+  return unescapedDelimiterIndex(value, delimiter, openerIndex + 1) === -1
+    ? delimiter
+    : null;
+}
+
 function redactSensitiveText(value) {
   const lines = String(value).split("\n");
   const output = [];
   let redactions = 0;
   let insidePem = false;
+  let sensitiveDelimiter = null;
   for (const originalLine of lines) {
+    if (sensitiveDelimiter !== null) {
+      const prefix = /^[+\- ]/u.test(originalLine) ? originalLine[0] : "";
+      output.push(`${prefix}[REDACTED_SENSITIVE_BLOCK]`);
+      redactions += 1;
+      if (unescapedDelimiterIndex(originalLine, sensitiveDelimiter) !== -1) {
+        sensitiveDelimiter = null;
+      }
+      continue;
+    }
     const marker = /^([+\- ]?)(-----BEGIN [^-]+-----)/u.exec(originalLine);
     if (marker) {
       insidePem = true;
@@ -215,21 +267,49 @@ function redactSensitiveText(value) {
       continue;
     }
     if (insidePem) {
+      const prefix = /^[+\- ]/u.test(originalLine) ? originalLine[0] : "";
+      output.push(`${prefix}[REDACTED_PEM_BLOCK]`);
+      redactions += 1;
       if (/-----END [^-]+-----/u.test(originalLine)) {
         insidePem = false;
       }
       continue;
     }
 
-    let line = originalLine;
-    const embeddedPemHeader = line.replace(
-      /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/gu,
-      "[REDACTED_PEM_HEADER]",
-    );
-    if (embeddedPemHeader !== line) {
+    const embeddedPemMatch =
+      /-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----/u
+        .exec(originalLine);
+    if (embeddedPemMatch) {
+      const prefix = /^[+\- ]/u.test(originalLine) ? originalLine[0] : "";
+      const before = originalLine.slice(0, embeddedPemMatch.index).trimEnd();
+      const remainder = originalLine.slice(embeddedPemMatch.index + embeddedPemMatch[0].length);
+      const trimmedRemainder = remainder.trim();
+      const isRegexLiteral =
+        before.endsWith("/") && /^\/[dgimsuvy]*[;,)\]]?$/u.test(trimmedRemainder);
+      const isClosedMarkerLiteral =
+        !/[+]/u.test(trimmedRemainder) &&
+        !/\\[rn]/u.test(trimmedRemainder) &&
+        /^(?:["'`])[;,)\]]?$/u.test(trimmedRemainder);
+      const beginsMultilineBlock =
+        !isRegexLiteral &&
+        !isClosedMarkerLiteral &&
+        !/-----END [^-]+-----/u.test(originalLine);
+      output.push(
+        `${prefix}${beginsMultilineBlock ? "[REDACTED_PEM_BLOCK]" : "[REDACTED_PEM_HEADER]"}`,
+      );
       redactions += 1;
-      line = embeddedPemHeader;
+      insidePem = beginsMultilineBlock;
+      continue;
     }
+    const multilineDelimiter = sensitiveMultilineDelimiter(originalLine);
+    if (multilineDelimiter !== null) {
+      const prefix = /^[+\- ]/u.test(originalLine) ? originalLine[0] : "";
+      output.push(`${prefix}[REDACTED_SENSITIVE_BLOCK]`);
+      redactions += 1;
+      sensitiveDelimiter = multilineDelimiter;
+      continue;
+    }
+    let line = originalLine;
     const replacements = [
       [
         /((?:api[_-]?key|secret(?:[_-]?access)?[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|refresh[_-]?token|password|passwd|pwd|secret|token)["'`\]]*\s*(?::|=(?!=|>))\s*)(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|[^\s,;}]+)/giu,
@@ -250,9 +330,32 @@ function redactSensitiveText(value) {
         line = next;
       }
     }
+    const inspectedLine = /^[+\- ]/u.test(line) ? line.slice(1) : line;
+    if (collectSecretIssues(inspectedLine).length > 0) {
+      const prefix = /^[+\- ]/u.test(line) ? line[0] : "";
+      line = `${prefix}[REDACTED_SENSITIVE_LINE]`;
+      redactions += 1;
+    }
     output.push(line);
   }
   return { text: output.join("\n"), redactions };
+}
+
+function redactSensitiveMetadata(value) {
+  const detected = redactSensitiveText(value);
+  if (detected.redactions === 0) return detected;
+  const safePrefix = [];
+  for (const line of String(value).split("\n")) {
+    if (redactSensitiveText(line).redactions > 0) break;
+    safePrefix.push(line);
+  }
+  const prefix = safePrefix.join("\n").trimEnd();
+  return {
+    text: prefix.length > 0
+      ? `${prefix}\n[REDACTED_SENSITIVE_TEXT]`
+      : "[REDACTED_SENSITIVE_TEXT]",
+    redactions: detected.redactions,
+  };
 }
 
 function createDeadline(timeoutMs) {
@@ -282,6 +385,15 @@ function mergeLimits(overrides = {}) {
     if (value > DEFAULT_LIMITS[key]) {
       throw new TypeError(`Limit ${key} cannot exceed ${DEFAULT_LIMITS[key]}.`);
     }
+  }
+  if (limits.filePatchBytes > limits.totalPatchBytes) {
+    throw new TypeError("Limit filePatchBytes cannot exceed totalPatchBytes.");
+  }
+  if (limits.passPatchBytes > limits.totalPatchBytes) {
+    throw new TypeError("Limit passPatchBytes cannot exceed totalPatchBytes.");
+  }
+  if (limits.passChangedLines > limits.totalChangedLines) {
+    throw new TypeError("Limit passChangedLines cannot exceed totalChangedLines.");
   }
   return limits;
 }
@@ -423,7 +535,7 @@ async function defaultGhRunner({ endpoint, paginate = false, slurp = false, dead
         return;
       }
       if (code !== 0) {
-        const diagnostic = redactSensitiveText(Buffer.concat(stderr).toString("utf8"))
+        const diagnostic = redactSensitiveMetadata(Buffer.concat(stderr).toString("utf8"))
           .text.replaceAll("\0", "")
           .trim()
           .slice(0, 500);
@@ -486,6 +598,8 @@ function normalizeMetadata(locator, pull) {
     (pull.body !== null && pull.body !== undefined && typeof pull.body !== "string") ||
     typeof pull.user?.login !== "string" ||
     pull.user.login.length === 0 ||
+    typeof pull.updated_at !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u.test(pull.updated_at) ||
     hasDisallowedControl(pull.user.login) ||
     !["open", "closed"].includes(pull.state) ||
     typeof pull.draft !== "boolean" ||
@@ -523,11 +637,19 @@ function normalizeMetadata(locator, pull) {
     commitCount,
     changedFiles,
   };
+  const safeFingerprintSnapshot = {
+    ...snapshot,
+    metadataUpdatedAt: pull.updated_at,
+    title: redactSensitiveMetadata(snapshot.title).text,
+    description: redactSensitiveMetadata(
+      truncateUtf8(snapshot.description, DEFAULT_LIMITS.descriptionBytes).text,
+    ).text,
+  };
   return Object.freeze({
     ...snapshot,
     snapshotFingerprint: createHash("sha256")
       .update(SNAPSHOT_FINGERPRINT_DOMAIN, "utf8")
-      .update(canonicalizeJson(snapshot), "utf8")
+      .update(canonicalizeJson(safeFingerprintSnapshot), "utf8")
       .digest("hex"),
   });
 }
@@ -562,10 +684,10 @@ export function assertSameSnapshot(first, second) {
     url: value?.url,
     title: bothMetadataOnly
       ? value?.title
-      : redactSensitiveText(value?.title ?? "").text,
+      : redactSensitiveMetadata(value?.title ?? "").text,
     description: bothMetadataOnly
       ? value?.description
-      : redactSensitiveText(
+      : redactSensitiveMetadata(
           truncateUtf8(value?.description ?? "", DEFAULT_LIMITS.descriptionBytes).text,
         ).text,
     author: value?.author,
@@ -626,7 +748,7 @@ function normalizeCommit(commit, index, tracker) {
     title = Array.from(title).slice(0, 4_000).join("");
     tracker.block("commit-metadata", "commit-title-size-limit");
   }
-  const redacted = redactSensitiveText(title);
+  const redacted = redactSensitiveMetadata(title);
   if (redacted.redactions > 0) {
     tracker.partial("commit-metadata", "suspected-secret-redacted");
   }
@@ -720,6 +842,41 @@ function makeTracker() {
   };
 }
 
+function completeUtf8Lines(value) {
+  const lines = [];
+  let start = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === "\n") {
+      lines.push(value.slice(start, index + 1));
+      start = index + 1;
+    }
+  }
+  if (start < value.length) {
+    lines.push(value.slice(start));
+  }
+  return lines;
+}
+
+function annotatedPatchLines(value) {
+  let inHunk = false;
+  return completeUtf8Lines(value).map((text, index) => {
+    const line = text.endsWith("\n") ? text.slice(0, -1).replace(/\r$/u, "") : text;
+    if (line.startsWith("@@")) {
+      inHunk = true;
+    }
+    const isMarker = line === "\\ No newline at end of file";
+    const additions = inHunk && !isMarker && line.startsWith("+") ? 1 : 0;
+    const deletions = inHunk && !isMarker && line.startsWith("-") ? 1 : 0;
+    return {
+      lineNumber: index + 1,
+      text,
+      bytes: Buffer.byteLength(text),
+      additions,
+      deletions,
+    };
+  });
+}
+
 function normalizeFile(file, state) {
   if (!isRecord(file) || typeof file.filename !== "string") {
     throw new GhApiError("GitHub changed-file metadata is malformed.", "invalid-response");
@@ -729,28 +886,37 @@ function normalizeFile(file, state) {
   const status = normalizeFileStatus(file.status);
   const additions = integer(file.additions, `${outputPath}.additions`);
   const deletions = integer(file.deletions, `${outputPath}.deletions`);
-  const previousPath =
+  const previousRawPath =
     status === "renamed" || status === "copied"
       ? typeof file.previous_filename === "string"
-        ? safePath(file.previous_filename)
+        ? file.previous_filename
         : null
       : null;
+  const previousPath =
+    previousRawPath === null ? null : safePath(previousRawPath);
   if ((status === "renamed" || status === "copied") && previousPath === null) {
     throw new GhApiError(`GitHub ${status} file is missing previous_filename.`, "invalid-response");
   }
   const output = { path: outputPath, previousPath, status, additions, deletions, bodyState: "included" };
-  const pathClassification = classifyPath(rawPath);
-  if (pathClassification === "unsafe-path") {
+  const classifiedPaths = [
+    { path: outputPath, classification: classifyPath(rawPath) },
+    ...(previousRawPath === null
+      ? []
+      : [{ path: previousPath, classification: classifyPath(previousRawPath) }]),
+  ];
+  const unsafePath = classifiedPaths.find((entry) => entry.classification === "unsafe-path");
+  if (unsafePath) {
     output.bodyState = "missing-patch";
-    state.tracker.block(outputPath, "unsafe-path");
+    state.tracker.block(unsafePath.path, "unsafe-path");
     return output;
   }
-  if (pathClassification === "secret-path") {
+  const secretPath = classifiedPaths.find((entry) => entry.classification === "secret-path");
+  if (secretPath) {
     output.bodyState = "secret-path";
-    state.tracker.partial(outputPath, "secret-path");
+    state.tracker.partial(secretPath.path, "secret-path");
     return output;
   }
-  if (pathClassification === "generated-or-lockfile") {
+  if (classifyPath(rawPath) === "generated-or-lockfile") {
     output.bodyState = "generated-or-lockfile";
     state.tracker.partial(outputPath, "generated-or-lockfile");
     return output;
@@ -785,26 +951,172 @@ function normalizeFile(file, state) {
     state.tracker.block(outputPath, "truncated-patch");
     return output;
   }
-  const fileChangedLines = additions + deletions;
-  if (state.analyzedChangedLines + fileChangedLines > state.limits.changedLines) {
-    output.bodyState = "size-limit";
-    state.tracker.block(outputPath, "changed-line-limit");
-    return output;
-  }
-  if (state.rawPatchBytes + rawPatchBytes > state.limits.totalPatchBytes) {
-    output.bodyState = "size-limit";
-    state.tracker.block(outputPath, "total-byte-limit");
-    return output;
-  }
   const redacted = redactSensitiveText(file.patch);
-  output.bodyState = redacted.redactions > 0 ? "redacted" : "included";
   if (redacted.redactions > 0) {
+    output.bodyState = "redacted";
     state.tracker.partial(outputPath, "suspected-secret-redacted");
+    return output;
   }
-  state.rawPatchBytes += rawPatchBytes;
-  state.analyzedChangedLines += fileChangedLines;
-  state.patches.push({ path: outputPath, text: redacted.text });
+  const storedPatchBytes = Buffer.byteLength(redacted.text);
+  if (storedPatchBytes === 0) {
+    output.bodyState = "metadata-only";
+    state.tracker.partial(outputPath, "metadata-only");
+    return output;
+  }
+  if (storedPatchBytes > state.limits.filePatchBytes) {
+    output.bodyState = "size-limit";
+    state.tracker.block(outputPath, "per-file-byte-limit");
+    return output;
+  }
+  const redactedCount = countPatchChanges(redacted.text);
+  if (redactedCount.additions !== additions || redactedCount.deletions !== deletions) {
+    output.bodyState = "missing-patch";
+    state.tracker.block(outputPath, "redaction-line-mismatch");
+    return output;
+  }
+  if (
+    annotatedPatchLines(redacted.text).some(
+      (line) => line.bytes > state.limits.passPatchBytes,
+    )
+  ) {
+    output.bodyState = "size-limit";
+    state.tracker.block(outputPath, "per-line-byte-limit");
+    return output;
+  }
+  output.bodyState = "included";
+  state.patchBodies.push({
+    path: outputPath,
+    additions,
+    deletions,
+    text: redacted.text,
+    bytes: storedPatchBytes,
+  });
   return output;
+}
+
+function applyTotalPatchLimit(patchBodies, files, state) {
+  const filesByPath = new Map(files.map((file) => [file.path, file]));
+  const included = [];
+  let patchBytes = 0;
+  let exceeded = false;
+  for (const patch of patchBodies) {
+    if (exceeded || patchBytes + patch.bytes > state.limits.totalPatchBytes) {
+      exceeded = true;
+      const file = filesByPath.get(patch.path);
+      if (file) file.bodyState = "size-limit";
+      state.tracker.block(patch.path, "total-patch-byte-limit");
+      continue;
+    }
+    included.push(patch);
+    patchBytes += patch.bytes;
+  }
+  return included;
+}
+
+export function calculateAnalysisPassFingerprint(pass, patches) {
+  const body = {
+    id: pass.id,
+    changedLines: pass.changedLines,
+    patchBytes: pass.patchBytes,
+    patchIds: pass.patchIds,
+    paths: pass.paths,
+    patches,
+  };
+  return createHash("sha256")
+    .update(ANALYSIS_PASS_FINGERPRINT_DOMAIN, "utf8")
+    .update(canonicalizeJson(body), "utf8")
+    .digest("hex");
+}
+
+function buildAnalysisPlan(patchBodies, limits) {
+  const passes = [];
+  const patches = [];
+  let currentPass;
+  let currentFragment;
+
+  function beginPass() {
+    if (passes.length >= MAX_ANALYSIS_PASSES) {
+      throw new CollectionError(
+        `The bounded analysis plan supports at most ${MAX_ANALYSIS_PASSES} passes.`,
+        "analysis-pass-limit",
+      );
+    }
+    currentPass = {
+      id: `pass-${String(passes.length + 1).padStart(3, "0")}`,
+      changedLines: 0,
+      patchBytes: 0,
+      patchIds: [],
+      paths: [],
+      fragments: [],
+    };
+    passes.push(currentPass);
+    currentFragment = undefined;
+  }
+
+  function beginFragment(pathValue, line) {
+    const id = `patch-${String(patches.length + 1).padStart(4, "0")}`;
+    currentFragment = {
+      id,
+      passId: currentPass.id,
+      path: pathValue,
+      startLine: line.lineNumber,
+      endLine: line.lineNumber,
+      additions: 0,
+      deletions: 0,
+      lineTexts: [],
+    };
+    currentPass.fragments.push(currentFragment);
+    currentPass.patchIds.push(id);
+    if (!currentPass.paths.includes(pathValue)) currentPass.paths.push(pathValue);
+    patches.push(currentFragment);
+  }
+
+  for (const patchBody of patchBodies) {
+    currentFragment = undefined;
+    for (const line of annotatedPatchLines(patchBody.text)) {
+      const changedLines = line.additions + line.deletions;
+      const exceedsCurrent =
+        currentPass !== undefined &&
+        (currentPass.changedLines + changedLines > limits.passChangedLines ||
+          currentPass.patchBytes + line.bytes > limits.passPatchBytes);
+      if (currentPass === undefined || exceedsCurrent) beginPass();
+      if (
+        currentFragment === undefined ||
+        currentFragment.passId !== currentPass.id ||
+        currentFragment.path !== patchBody.path ||
+        currentFragment.endLine + 1 !== line.lineNumber
+      ) {
+        beginFragment(patchBody.path, line);
+      }
+      currentFragment.endLine = line.lineNumber;
+      currentFragment.additions += line.additions;
+      currentFragment.deletions += line.deletions;
+      currentFragment.lineTexts.push(line.text);
+      currentPass.changedLines += changedLines;
+      currentPass.patchBytes += line.bytes;
+    }
+  }
+
+  const finalizedPatches = patches.map(({ lineTexts, ...patch }) => ({
+    ...patch,
+    text: lineTexts.join(""),
+  }));
+  const patchesById = new Map(finalizedPatches.map((patch) => [patch.id, patch]));
+  const finalizedPasses = passes.map(({ fragments, ...pass }) => {
+    const passPatches = pass.patchIds.map((id) => patchesById.get(id));
+    return {
+      ...pass,
+      fingerprint: calculateAnalysisPassFingerprint(pass, passPatches),
+    };
+  });
+  return {
+    patches: finalizedPatches,
+    analysisPlan: {
+      lineLimitPerPass: limits.passChangedLines,
+      byteLimitPerPass: limits.passPatchBytes,
+      passes: finalizedPasses,
+    },
+  };
 }
 
 function warningSummary(exclusions) {
@@ -866,7 +1178,7 @@ export async function collectChangeRequest({ url, runner = defaultGhRunner, limi
   }
 
   const tracker = makeTracker();
-  const titleRedaction = redactSensitiveText(first.title);
+  const titleRedaction = redactSensitiveMetadata(first.title);
   if (titleRedaction.redactions > 0) {
     tracker.partial("change-request-title", "suspected-secret-redacted");
   }
@@ -874,7 +1186,7 @@ export async function collectChangeRequest({ url, runner = defaultGhRunner, limi
   if (boundedDescription.truncated) {
     tracker.block("change-request-description", "description-byte-limit");
   }
-  const descriptionRedaction = redactSensitiveText(boundedDescription.text);
+  const descriptionRedaction = redactSensitiveMetadata(boundedDescription.text);
   if (descriptionRedaction.redactions > 0) {
     tracker.partial("change-request-description", "suspected-secret-redacted");
   }
@@ -902,42 +1214,52 @@ export async function collectChangeRequest({ url, runner = defaultGhRunner, limi
     0,
   );
   const changedLines = additions + deletions;
+  if (![additions, deletions, changedLines].every(Number.isSafeInteger)) {
+    throw new GhApiError("GitHub changed-line totals exceed safe integer bounds.", "invalid-response");
+  }
+  if (changedLines > resolvedLimits.totalChangedLines) {
+    tracker.block("change-request-diff", "total-changed-line-limit");
+  }
   if (first.changedFiles > resolvedLimits.maxFiles || rawFiles.length > resolvedLimits.maxFiles) {
     tracker.block("additional-files-not-represented", "file-count-limit");
   }
+  const orderedFiles = [...rawFiles].sort((left, right) =>
+    compareCanonicalText(safePath(left?.filename), safePath(right?.filename)),
+  );
   const fileState = {
     limits: resolvedLimits,
-    patches: [],
-    rawPatchBytes: 0,
-    analyzedChangedLines: 0,
+    patchBodies: [],
     tracker,
   };
-  const files = rawFiles
+  const files = orderedFiles
     .slice(0, Math.min(resolvedLimits.maxFiles, first.changedFiles))
     .map((file) => normalizeFile(file, fileState));
-  if (fileState.patches.length === 0) {
+  const patchBodies = applyTotalPatchLimit(fileState.patchBodies, files, fileState);
+  if (patchBodies.length === 0) {
     throw new CollectionError(
       "No explainable text patch was included in the change request.",
       "no-explainable-text",
     );
   }
-  const patchBytes = fileState.patches.reduce(
-    (total, patch) => total + Buffer.byteLength(patch.text),
+  const { patches, analysisPlan } = buildAnalysisPlan(patchBodies, resolvedLimits);
+  const patchBytes = patches.reduce((total, patch) => total + Buffer.byteLength(patch.text), 0);
+  const explainableChangedLines = patches.reduce(
+    (total, patch) => total + patch.additions + patch.deletions,
     0,
   );
-  const coverage = {
+  let coverage = {
     status: tracker.status(),
     discoveredFiles: first.changedFiles,
     representedFiles: files.length,
-    includedBodies: fileState.patches.length,
-    metadataOnlyBodies: files.length - fileState.patches.length,
+    includedBodies: patchBodies.length,
+    metadataOnlyBodies: files.length - patchBodies.length,
     additions,
     deletions,
     changedLines,
-    analyzedChangedLines: fileState.analyzedChangedLines,
+    explainableChangedLines,
     patchBytes,
   };
-  const withoutFingerprint = {
+  let withoutFingerprint = {
     schemaVersion: 1,
     provider: "github",
     host: "github.com",
@@ -962,11 +1284,24 @@ export async function collectChangeRequest({ url, runner = defaultGhRunner, limi
     commitCount: first.commitCount,
     commits,
     files,
-    patches: fileState.patches,
+    patches,
+    analysisPlan,
     coverage,
     exclusions: tracker.exclusions,
     warnings: warningSummary(tracker.exclusions),
   };
+  const provisionalSummary = { ...withoutFingerprint, fingerprint: "0".repeat(64) };
+  delete provisionalSummary.patches;
+  if (Buffer.byteLength(JSON.stringify(provisionalSummary)) > resolvedLimits.summaryBytes) {
+    tracker.block("change-request-summary", "summary-byte-limit");
+    coverage = { ...coverage, status: tracker.status() };
+    withoutFingerprint = {
+      ...withoutFingerprint,
+      coverage,
+      exclusions: tracker.exclusions,
+      warnings: warningSummary(tracker.exclusions),
+    };
+  }
   const result = {
     ...withoutFingerprint,
     fingerprint: calculateChangeRequestFingerprint(withoutFingerprint),
@@ -985,6 +1320,11 @@ export function calculateChangeRequestFingerprint(value) {
     .update(FINGERPRINT_DOMAIN, "utf8")
     .update(canonicalizeJson(withoutFingerprint), "utf8")
     .digest("hex");
+}
+
+function inspectionSummaryBytes(value) {
+  const { patches: _patches, ...summary } = value;
+  return Buffer.byteLength(JSON.stringify(summary));
 }
 
 function exactKeys(value, expected, label, issues) {
@@ -1120,8 +1460,8 @@ export function validateChangeRequest(value) {
     "size-limit",
   ]);
   const filePaths = new Set();
-  if (!Array.isArray(value.files) || value.files.length < 1 || value.files.length > 80) {
-    issues.push("$.files must contain between 1 and 80 files");
+  if (!Array.isArray(value.files) || value.files.length < 1 || value.files.length > DEFAULT_LIMITS.maxFiles) {
+    issues.push(`$.files must contain between 1 and ${DEFAULT_LIMITS.maxFiles} files`);
   } else {
     value.files.forEach((file, index) => {
       const label = `$.files[${index}]`;
@@ -1150,29 +1490,66 @@ export function validateChangeRequest(value) {
       }
       if (!bodyStates.has(file.bodyState)) issues.push(`${label}.bodyState is invalid`);
     });
+    const paths = value.files.map((file) => file?.path);
+    const sortedPaths = [...paths].sort(compareCanonicalText);
+    if (canonicalizeJson(paths) !== canonicalizeJson(sortedPaths)) {
+      issues.push("$.files must be sorted deterministically by path");
+    }
   }
 
+  const patchIds = new Set();
   const patchPaths = new Set();
+  const patchesById = new Map();
+  const patchesByPath = new Map();
   let actualPatchBytes = 0;
-  if (!Array.isArray(value.patches) || value.patches.length > 80) {
-    issues.push("$.patches must contain at most 80 patches");
+  let actualExplainableChangedLines = 0;
+  if (!Array.isArray(value.patches) || value.patches.length < 1 || value.patches.length > 1_024) {
+    issues.push("$.patches must contain between 1 and 1024 fragments");
   } else {
     value.patches.forEach((patch, index) => {
       const label = `$.patches[${index}]`;
-      if (!exactKeys(patch, ["path", "text"], label, issues)) return;
+      const keys = [
+        "id",
+        "passId",
+        "path",
+        "startLine",
+        "endLine",
+        "additions",
+        "deletions",
+        "text",
+      ];
+      if (!exactKeys(patch, keys, label, issues)) return;
+      const expectedId = `patch-${String(index + 1).padStart(4, "0")}`;
+      if (patch.id !== expectedId) issues.push(`${label}.id must equal ${expectedId}`);
+      if (patchIds.has(patch.id)) issues.push(`${label}.id is duplicated`);
+      patchIds.add(patch.id);
+      patchesById.set(patch.id, patch);
+      if (typeof patch.passId !== "string" || !/^pass-[0-9]{3}$/u.test(patch.passId)) {
+        issues.push(`${label}.passId is invalid`);
+      }
       if (!isSafeRelativePath(patch.path) || !filePaths.has(patch.path)) {
         issues.push(`${label}.path must reference a known safe file`);
       }
-      if (patchPaths.has(patch.path)) issues.push(`${label}.path is duplicated`);
       patchPaths.add(patch.path);
+      if (!patchesByPath.has(patch.path)) patchesByPath.set(patch.path, []);
+      patchesByPath.get(patch.path).push(patch);
+      if (!Number.isSafeInteger(patch.startLine) || patch.startLine < 1) {
+        issues.push(`${label}.startLine must be a positive integer`);
+      }
+      if (!Number.isSafeInteger(patch.endLine) || patch.endLine < patch.startLine) {
+        issues.push(`${label}.endLine must be at least startLine`);
+      }
+      if (!validCount(patch.additions) || !validCount(patch.deletions)) {
+        issues.push(`${label} additions and deletions must be counts`);
+      } else {
+        actualExplainableChangedLines += patch.additions + patch.deletions;
+      }
       if (typeof patch.text !== "string") {
         issues.push(`${label}.text must be a string`);
       } else {
         const bytes = Buffer.byteLength(patch.text);
         actualPatchBytes += bytes;
-        if (bytes > DEFAULT_LIMITS.filePatchBytes) {
-          issues.push(`${label}.text exceeds the per-file byte limit`);
-        }
+        if (bytes < 1) issues.push(`${label}.text must not be empty`);
         if (hasDisallowedControl(patch.text)) {
           issues.push(`${label}.text contains a disallowed control character`);
         }
@@ -1181,11 +1558,165 @@ export function validateChangeRequest(value) {
   }
   if (Array.isArray(value.files)) {
     value.files.forEach((file, index) => {
-      const shouldHavePatch = ["included", "redacted"].includes(file?.bodyState);
+      const shouldHavePatch = file?.bodyState === "included";
       if (shouldHavePatch !== patchPaths.has(file?.path)) {
         issues.push(`$.files[${index}] patch presence does not match bodyState`);
       }
+      const fragments = patchesByPath.get(file?.path) ?? [];
+      if (fragments.length > 0) {
+        const reconstructed = fragments.map((fragment) => String(fragment.text ?? "")).join("");
+        const annotated = annotatedPatchLines(reconstructed);
+        let nextLine = 1;
+        let additions = 0;
+        let deletions = 0;
+        let bytes = 0;
+        fragments.forEach((fragment, fragmentIndex) => {
+          if (fragment.startLine !== nextLine) {
+            issues.push(`$.patches for ${file.path} must have contiguous line ranges starting at 1`);
+          }
+          nextLine = fragment.endLine + 1;
+          const boundLines = annotated.slice(fragment.startLine - 1, fragment.endLine);
+          if (
+            boundLines.length !== fragment.endLine - fragment.startLine + 1 ||
+            boundLines.map((line) => line.text).join("") !== fragment.text
+          ) {
+            issues.push(`$.patches fragment ${fragment.id} does not match its complete-line range`);
+          }
+          const expectedAdditions = boundLines.reduce((total, line) => total + line.additions, 0);
+          const expectedDeletions = boundLines.reduce((total, line) => total + line.deletions, 0);
+          if (
+            fragment.additions !== expectedAdditions ||
+            fragment.deletions !== expectedDeletions
+          ) {
+            issues.push(`$.patches fragment ${fragment.id} has inconsistent changed-line counts`);
+          }
+          additions += fragment.additions;
+          deletions += fragment.deletions;
+          bytes += Buffer.byteLength(fragment.text ?? "");
+          if (fragmentIndex < fragments.length - 1 && !String(fragment.text ?? "").endsWith("\n")) {
+            issues.push(`$.patches for ${file.path} may split only after a complete line`);
+          }
+        });
+        if (additions !== file.additions || deletions !== file.deletions) {
+          issues.push(`$.patches for ${file.path} do not match file additions and deletions`);
+        }
+        if (bytes > DEFAULT_LIMITS.filePatchBytes) {
+          issues.push(`$.patches for ${file.path} exceed the per-file byte limit`);
+        }
+      }
     });
+  }
+
+  const plannedPatchIds = [];
+  if (
+    exactKeys(
+      value.analysisPlan,
+      ["lineLimitPerPass", "byteLimitPerPass", "passes"],
+      "$.analysisPlan",
+      issues,
+    )
+  ) {
+    if (
+      !Number.isSafeInteger(value.analysisPlan.lineLimitPerPass) ||
+      value.analysisPlan.lineLimitPerPass < 1 ||
+      value.analysisPlan.lineLimitPerPass > DEFAULT_LIMITS.passChangedLines
+    ) {
+      issues.push("$.analysisPlan.lineLimitPerPass is invalid");
+    }
+    if (
+      !Number.isSafeInteger(value.analysisPlan.byteLimitPerPass) ||
+      value.analysisPlan.byteLimitPerPass < 1 ||
+      value.analysisPlan.byteLimitPerPass > DEFAULT_LIMITS.passPatchBytes
+    ) {
+      issues.push("$.analysisPlan.byteLimitPerPass is invalid");
+    }
+    if (
+      !Array.isArray(value.analysisPlan.passes) ||
+      value.analysisPlan.passes.length < 1 ||
+      value.analysisPlan.passes.length > MAX_ANALYSIS_PASSES
+    ) {
+      issues.push(`$.analysisPlan.passes must contain between 1 and ${MAX_ANALYSIS_PASSES} passes`);
+    } else {
+      const seenPlannedIds = new Set();
+      value.analysisPlan.passes.forEach((pass, index) => {
+        const label = `$.analysisPlan.passes[${index}]`;
+        const keys = ["id", "fingerprint", "changedLines", "patchBytes", "patchIds", "paths"];
+        if (!exactKeys(pass, keys, label, issues)) return;
+        const expectedId = `pass-${String(index + 1).padStart(3, "0")}`;
+        if (pass.id !== expectedId) issues.push(`${label}.id must equal ${expectedId}`);
+        if (!/^[a-f0-9]{64}$/u.test(pass.fingerprint ?? "")) {
+          issues.push(`${label}.fingerprint must be a lowercase SHA-256 digest`);
+        }
+        if (!validCount(pass.changedLines)) issues.push(`${label}.changedLines must be a count`);
+        if (!validCount(pass.patchBytes)) issues.push(`${label}.patchBytes must be a count`);
+        if (
+          Number.isSafeInteger(pass.changedLines) &&
+          pass.changedLines > value.analysisPlan.lineLimitPerPass
+        ) {
+          issues.push(`${label}.changedLines exceeds the per-pass line limit`);
+        }
+        if (
+          Number.isSafeInteger(pass.patchBytes) &&
+          pass.patchBytes > value.analysisPlan.byteLimitPerPass
+        ) {
+          issues.push(`${label}.patchBytes exceeds the per-pass byte limit`);
+        }
+        if (!Array.isArray(pass.patchIds) || pass.patchIds.length < 1 || pass.patchIds.length > 1_024) {
+          issues.push(`${label}.patchIds must contain between 1 and 1024 ids`);
+          return;
+        }
+        if (!Array.isArray(pass.paths) || pass.paths.length < 1 || pass.paths.length > DEFAULT_LIMITS.maxFiles) {
+          issues.push(`${label}.paths must contain between 1 and ${DEFAULT_LIMITS.maxFiles} paths`);
+          return;
+        }
+        const passPatches = [];
+        for (const patchId of pass.patchIds) {
+          if (typeof patchId !== "string" || !/^patch-[0-9]{4}$/u.test(patchId)) {
+            issues.push(`${label}.patchIds contains an invalid id`);
+            continue;
+          }
+          if (seenPlannedIds.has(patchId)) issues.push(`${label}.patchIds duplicates ${patchId}`);
+          seenPlannedIds.add(patchId);
+          plannedPatchIds.push(patchId);
+          const fragment = patchesById.get(patchId);
+          if (!fragment) {
+            issues.push(`${label}.patchIds references unknown ${patchId}`);
+          } else {
+            passPatches.push(fragment);
+            if (fragment.passId !== pass.id) {
+              issues.push(`$.patches fragment ${patchId} does not bind to ${pass.id}`);
+            }
+          }
+        }
+        const expectedPaths = [...new Set(passPatches.map((fragment) => fragment.path))];
+        if (canonicalizeJson(pass.paths) !== canonicalizeJson(expectedPaths)) {
+          issues.push(`${label}.paths do not match its ordered patch fragments`);
+        }
+        const expectedChangedLines = passPatches.reduce(
+          (total, fragment) => total + fragment.additions + fragment.deletions,
+          0,
+        );
+        const expectedPatchBytes = passPatches.reduce(
+          (total, fragment) => total + Buffer.byteLength(fragment.text ?? ""),
+          0,
+        );
+        if (pass.changedLines !== expectedChangedLines) {
+          issues.push(`${label}.changedLines is inconsistent`);
+        }
+        if (pass.patchBytes !== expectedPatchBytes) {
+          issues.push(`${label}.patchBytes is inconsistent`);
+        }
+        if (calculateAnalysisPassFingerprint(pass, passPatches) !== pass.fingerprint) {
+          issues.push(`${label}.fingerprint does not match its patch fragments`);
+        }
+      });
+    }
+  }
+  if (
+    Array.isArray(value.patches) &&
+    canonicalizeJson(plannedPatchIds) !== canonicalizeJson(value.patches.map((patch) => patch?.id))
+  ) {
+    issues.push("$.analysisPlan must cover every patch fragment exactly once and in order");
   }
 
   const coverageKeys = [
@@ -1197,7 +1728,7 @@ export function validateChangeRequest(value) {
     "additions",
     "deletions",
     "changedLines",
-    "analyzedChangedLines",
+    "explainableChangedLines",
     "patchBytes",
   ];
   if (exactKeys(value.coverage, coverageKeys, "$.coverage", issues)) {
@@ -1213,8 +1744,8 @@ export function validateChangeRequest(value) {
     if (value.coverage.representedFiles > value.coverage.discoveredFiles) {
       issues.push("$.coverage.representedFiles cannot exceed discovered files");
     }
-    if (value.coverage.includedBodies !== value.patches?.length) {
-      issues.push("$.coverage.includedBodies must match $.patches");
+    if (value.coverage.includedBodies !== patchPaths.size) {
+      issues.push("$.coverage.includedBodies must match files with patch fragments");
     }
     if (
       value.coverage.metadataOnlyBodies !==
@@ -1225,16 +1756,19 @@ export function validateChangeRequest(value) {
     if (value.coverage.changedLines !== value.coverage.additions + value.coverage.deletions) {
       issues.push("$.coverage.changedLines is inconsistent");
     }
-    const analyzedChangedLines = Array.isArray(value.files)
+    const explainableChangedLines = Array.isArray(value.files)
       ? value.files
-          .filter((file) => ["included", "redacted"].includes(file?.bodyState))
+          .filter((file) => file?.bodyState === "included")
           .reduce((total, file) => total + file.additions + file.deletions, 0)
       : 0;
-    if (value.coverage.analyzedChangedLines !== analyzedChangedLines) {
-      issues.push("$.coverage.analyzedChangedLines is inconsistent");
+    if (
+      value.coverage.explainableChangedLines !== explainableChangedLines ||
+      value.coverage.explainableChangedLines !== actualExplainableChangedLines
+    ) {
+      issues.push("$.coverage.explainableChangedLines is inconsistent");
     }
-    if (value.coverage.analyzedChangedLines > value.coverage.changedLines) {
-      issues.push("$.coverage.analyzedChangedLines cannot exceed total changed lines");
+    if (value.coverage.explainableChangedLines > value.coverage.changedLines) {
+      issues.push("$.coverage.explainableChangedLines cannot exceed total changed lines");
     }
     if (value.coverage.patchBytes !== actualPatchBytes) {
       issues.push("$.coverage.patchBytes is inconsistent");
@@ -1251,15 +1785,16 @@ export function validateChangeRequest(value) {
     if (
       value.coverage.status !== "blocked" &&
       (value.coverage.discoveredFiles > DEFAULT_LIMITS.maxFiles ||
-        value.coverage.analyzedChangedLines > DEFAULT_LIMITS.changedLines ||
-        value.coverage.patchBytes > DEFAULT_LIMITS.totalPatchBytes)
+        value.coverage.changedLines > DEFAULT_LIMITS.totalChangedLines ||
+        value.coverage.patchBytes > DEFAULT_LIMITS.totalPatchBytes ||
+        inspectionSummaryBytes(value) > DEFAULT_LIMITS.summaryBytes)
     ) {
       issues.push("non-blocked coverage exceeds a collector safety limit");
     }
   }
 
-  if (!Array.isArray(value.exclusions) || value.exclusions.length > 100) {
-    issues.push("$.exclusions must contain at most 100 entries");
+  if (!Array.isArray(value.exclusions) || value.exclusions.length > 400) {
+    issues.push("$.exclusions must contain at most 400 entries");
   } else {
     value.exclusions.forEach((entry, index) => {
       const label = `$.exclusions[${index}]`;
@@ -1286,12 +1821,15 @@ export function validateChangeRequest(value) {
     "commit-title-size-limit",
     "provider-file-enumeration-incomplete",
     "file-count-limit",
-    "changed-line-limit",
+    "total-changed-line-limit",
     "unsafe-path",
     "missing-or-truncated-patch",
     "truncated-patch",
     "per-file-byte-limit",
-    "total-byte-limit",
+    "per-line-byte-limit",
+    "total-patch-byte-limit",
+    "summary-byte-limit",
+    "redaction-line-mismatch",
   ]);
   const hasBlockingReason = Array.isArray(value.exclusions)
     ? value.exclusions.some((entry) => blockingReasons.has(entry?.reason))
@@ -1425,9 +1963,14 @@ async function main() {
   console.log(outputPath);
 }
 
-const isEntrypoint = process.argv[1]
-  ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
-  : false;
+const isEntrypoint = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+  } catch {
+    return false;
+  }
+})();
 
 if (isEntrypoint) {
   main().catch((error) => {

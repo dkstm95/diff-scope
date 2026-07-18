@@ -17,7 +17,8 @@ const SECRET_PATTERNS = [
   },
   {
     label: "URL userinfo credential",
-    pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/iu,
+    requiredSubstrings: ["://", "@"],
+    pattern: /(?:^|[^a-z0-9+.-])[a-z][a-z0-9+.-]{0,63}:\/\/[^\s/@:]+:[^\s/@]+@/iu,
   },
 ];
 
@@ -35,12 +36,17 @@ const DETECTOR_DEFINITION_SUFFIXES = new Set([
   "detector",
   "detectors",
 ]);
-const BARE_ASSIGNMENT_PATTERN = /(?:^|[\s,{;])([A-Za-z0-9_.:@/-]+)[ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|([^\r\n,;}]+))/gmu;
-const QUOTED_KEY_ASSIGNMENT_PATTERN = /(?:^|[\s,{;])(["'`])((?:\\.|(?!\1)[^\\\r\n])*)\1[ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|([^\r\n,;}]+))/gmu;
-const BRACKETED_ASSIGNMENT_PATTERN = /\[[ \t]*(["'`])((?:\\.|(?!\1)[^\\\r\n])*)\1[ \t]*\][ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|([^\r\n,;}]+))/gmu;
+const BARE_ASSIGNMENT_PATTERN = /(?:^|[\s,{;])([A-Za-z0-9_.:@/-]+)[ \t]*(?::|(?:\?\?|\|\||&&|\*\*|>>>|<<|>>|[+\-*/%&|^])?=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"(?![ \t]*(?:"|\+))|'((?:\\.|[^'\\\r\n])*)'(?![ \t]*(?:'|\+))|`((?:\\.|[^`\\\r\n])*)`(?![ \t]*(?:`|\+))|([^\r\n,;}]+))/gmu;
+const QUOTED_KEY_ASSIGNMENT_PATTERN = /(?:^|[\s,{;])(["'`])((?:\\.|(?!\1)[^\\\r\n])*)\1[ \t]*(?::|(?:\?\?|\|\||&&|\*\*|>>>|<<|>>|[+\-*/%&|^])?=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"(?![ \t]*(?:"|\+))|'((?:\\.|[^'\\\r\n])*)'(?![ \t]*(?:'|\+))|`((?:\\.|[^`\\\r\n])*)`(?![ \t]*(?:`|\+))|([^\r\n,;}]+))/gmu;
+const BRACKETED_ASSIGNMENT_PATTERN = /\[[ \t]*(["'`])((?:\\.|(?!\1)[^\\\r\n])*)\1[ \t]*\][ \t]*(?::|(?:\?\?|\|\||&&|\*\*|>>>|<<|>>|[+\-*/%&|^])?=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"(?![ \t]*(?:"|\+))|'((?:\\.|[^'\\\r\n])*)'(?![ \t]*(?:'|\+))|`((?:\\.|[^`\\\r\n])*)`(?![ \t]*(?:`|\+))|([^\r\n,;}]+))/gmu;
 
 function childPath(parent, child) {
-  return parent === "$" ? `$.${child}` : `${parent}.${child}`;
+  const value = String(child);
+  const safeSegment = /^[A-Za-z_$][A-Za-z0-9_$-]{0,63}$/u.test(value) &&
+    secretLabels(value).length === 0
+    ? value
+    : "<property>";
+  return parent === "$" ? `$.${safeSegment}` : `${parent}.${safeSegment}`;
 }
 
 function isRecord(value) {
@@ -111,6 +117,18 @@ function assignmentIsUnsafe(key, value, quoted) {
   return !isPlaceholder(value) && (quoted || !isSafeReference(value));
 }
 
+function hasUnsafeQuotedPlaceholderTail(source, match, quoted, assigned) {
+  if (!quoted || !isPlaceholder(assigned)) return false;
+  const sameLineTail = source
+    .slice(match.index + match[0].length)
+    .split(/\r?\n/u, 1)[0]
+    .trimStart();
+  return (
+    sameLineTail.length > 0 &&
+    !/^(?:;|,|\)|\]|\})/u.test(sameLineTail)
+  );
+}
+
 function containsUnsafeAssignment(value) {
   BARE_ASSIGNMENT_PATTERN.lastIndex = 0;
   let match = BARE_ASSIGNMENT_PATTERN.exec(value);
@@ -118,7 +136,10 @@ function containsUnsafeAssignment(value) {
     if (isSensitiveKey(match[1])) {
       const quoted = match[2] !== undefined || match[3] !== undefined || match[4] !== undefined;
       const assigned = match[2] ?? match[3] ?? match[4] ?? match[5] ?? "";
-      if (assignmentIsUnsafe(match[1], assigned, quoted)) return true;
+      if (
+        hasUnsafeQuotedPlaceholderTail(value, match, quoted, assigned) ||
+        assignmentIsUnsafe(match[1], assigned, quoted)
+      ) return true;
     }
     match = BARE_ASSIGNMENT_PATTERN.exec(value);
   }
@@ -130,7 +151,10 @@ function containsUnsafeAssignment(value) {
       if (isSensitiveKey(key)) {
         const quoted = match[3] !== undefined || match[4] !== undefined || match[5] !== undefined;
         const assigned = match[3] ?? match[4] ?? match[5] ?? match[6] ?? "";
-        if (assignmentIsUnsafe(key, assigned, quoted)) return true;
+        if (
+          hasUnsafeQuotedPlaceholderTail(value, match, quoted, assigned) ||
+          assignmentIsUnsafe(key, assigned, quoted)
+        ) return true;
       }
       match = pattern.exec(value);
     }
@@ -142,7 +166,10 @@ function secretLabels(value) {
   const labels = [];
   const normalized = value.replaceAll('\\"', '"').replaceAll("\\'", "'");
   for (const entry of SECRET_PATTERNS) {
-    if (entry.pattern.test(value) || entry.pattern.test(normalized)) labels.push(entry.label);
+    const matches = (candidate) =>
+      (entry.requiredSubstrings ?? []).every((part) => candidate.includes(part)) &&
+      entry.pattern.test(candidate);
+    if (matches(value) || matches(normalized)) labels.push(entry.label);
   }
   if (containsUnsafeAssignment(normalized)) labels.push("secret assignment");
   return [...new Set(labels)];

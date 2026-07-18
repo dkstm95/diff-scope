@@ -16,13 +16,19 @@ import { fileURLToPath } from "node:url";
 
 import {
   GhApiError,
+  calculateAnalysisPassFingerprint,
   calculateChangeRequestFingerprint,
 } from "../plugins/hope/skills/diff/scripts/collect-change-request.mjs";
 import {
   loadJsonDocument,
   main,
+  MAX_REVIEW_FILE_BYTES,
   parseRenderArguments,
 } from "../plugins/hope/skills/diff/scripts/render-review.mjs";
+import {
+  buildInspectionPages,
+  inspectionCompletion,
+} from "../plugins/hope/skills/diff/scripts/lib/inspection-pages.mjs";
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(testDirectory, "fixtures", "review-model-v1.json");
@@ -36,24 +42,64 @@ async function fixture() {
 }
 
 function contextFor(review) {
-  const patches = [
+  const patchBodies = [
     {
       path: "src/routing.mjs",
       text:
-        "@@ -1 +1,5 @@\n" +
+        "@@ -1 +1,7 @@\n" +
+        "-return service.load(request.id);\n" +
         "+if (!request.id?.trim()) {\n" +
         "+  return { status: 400, code: \"missing_id\" };\n" +
         "+}\n" +
-        " return service.load(request.id);",
+        "+return service.load(request.id);\n" +
+        "+audit.validated(request.id);\n" +
+        "+metrics.increment(\"valid_request\");\n" +
+        "+return response;",
+      additions: 7,
+      deletions: 1,
     },
     {
       path: "test/routing.test.mjs",
       text:
-        "@@ -7,2 +7,2 @@\n" +
+        "@@ -7,1 +7,5 @@\n" +
+        "-assert.equal(response.status, 500);\n" +
         "+assert.equal(response.status, 400);\n" +
-        "+assert.equal(repository.calls, 0);",
+        "+assert.equal(repository.calls, 0);\n" +
+        "+assert.equal(response.code, \"missing_id\");\n" +
+        "+assert.equal(service.calls, 0);\n" +
+        "+assert.equal(metrics.calls, 0);",
+      additions: 5,
+      deletions: 1,
     },
   ];
+  const patches = patchBodies.map((patch, index) => ({
+    id: `patch-${String(index + 1).padStart(4, "0")}`,
+    passId: `pass-${String(index + 1).padStart(3, "0")}`,
+    path: patch.path,
+    startLine: 1,
+    endLine: patch.text.split("\n").length,
+    additions: patch.additions,
+    deletions: patch.deletions,
+    text: patch.text,
+  }));
+  const passes = patches.map((patch, index) => {
+    const pass = {
+      id: patch.passId,
+      changedLines: patch.additions + patch.deletions,
+      patchBytes: Buffer.byteLength(patch.text),
+      patchIds: [patch.id],
+      paths: [patch.path],
+    };
+    return {
+      ...pass,
+      fingerprint: calculateAnalysisPassFingerprint(pass, [patch]),
+    };
+  });
+  const analysisPlan = {
+    lineLimitPerPass: 4_000,
+    byteLimitPerPass: 64 * 1024,
+    passes,
+  };
   const context = {
     schemaVersion: 1,
     provider: review.changeRequest.provider,
@@ -87,8 +133,13 @@ function contextFor(review) {
     ],
     files: clone(review.changeRequest.files),
     patches,
+    analysisPlan,
     coverage: {
       ...clone(review.changeRequest.coverage),
+      explainableChangedLines: patches.reduce(
+        (total, patch) => total + patch.additions + patch.deletions,
+        0,
+      ),
       patchBytes: patches.reduce(
         (total, patch) => total + Buffer.byteLength(patch.text),
         0,
@@ -97,9 +148,27 @@ function contextFor(review) {
     exclusions: clone(review.changeRequest.exclusions),
     warnings: clone(review.changeRequest.warnings),
   };
+  review.changeRequest.analysisPlan = clone(analysisPlan);
   review.changeRequest.coverage = clone(context.coverage);
+  review.analysisCoverage.processedPasses.forEach((processedPass, index) => {
+    processedPass.id = passes[index].id;
+    processedPass.fingerprint = passes[index].fingerprint;
+  });
   context.fingerprint = calculateChangeRequestFingerprint(context);
   review.changeRequest.fingerprint = context.fingerprint;
+  review.analysisCoverage.inspectionProtocolVersion = 1;
+  review.analysisCoverage.summary = {
+    fingerprint: context.fingerprint,
+    ...inspectionCompletion(buildInspectionPages(context, { kind: "summary" })),
+  };
+  review.analysisCoverage.processedPasses.forEach((processedPass) => {
+    Object.assign(
+      processedPass,
+      inspectionCompletion(
+        buildInspectionPages(context, { kind: "pass", passId: processedPass.id }),
+      ),
+    );
+  });
   return context;
 }
 
@@ -141,6 +210,29 @@ test("parses the narrow renderer CLI and restricts cleanup to Hope-owned inputs"
   assert.throws(
     () => parseRenderArguments(["--input", input, "--context", input]),
     /must be different/u,
+  );
+  assert.throws(
+    () => parseRenderArguments([
+      "--input",
+      input,
+      "--context",
+      context,
+      "--validate-only",
+      "--cleanup",
+    ]),
+    /cannot be combined/u,
+  );
+  assert.throws(
+    () => parseRenderArguments([
+      "--input",
+      input,
+      "--context",
+      context,
+      "--validate-only",
+      "--output",
+      "review.html",
+    ]),
+    /not allowed with --validate-only/u,
   );
 });
 
@@ -209,6 +301,30 @@ test("loads JSON through one bounded non-symlink file handle", async (t) => {
   assert.deepEqual(await loadJsonDocument(source, "fixture", 100), { ok: true });
   await assert.rejects(loadJsonDocument(link, "fixture", 100), /non-symlink/u);
   await assert.rejects(loadJsonDocument(source, "fixture", 4), /byte limit/u);
+
+  const secret = "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456";
+  await writeFile(source, `{"value":"${secret}",`);
+  await assert.rejects(
+    loadJsonDocument(source, "fixture", 100),
+    (error) => /not valid JSON/u.test(error.message) && !error.message.includes(secret),
+  );
+});
+
+test("allows bounded JSON formatting overhead above the compact model budget", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "review-formatting-test-"));
+  t.after(async () => await rm(directory, { recursive: true, force: true }));
+  const source = join(directory, "source.json");
+  const formatting = " ".repeat(MAX_REVIEW_FILE_BYTES / 2 + 1);
+  await writeFile(source, `{"ok":true}${formatting}`);
+
+  assert.deepEqual(
+    await loadJsonDocument(source, "fixture", MAX_REVIEW_FILE_BYTES),
+    { ok: true },
+  );
+  await assert.rejects(
+    loadJsonDocument(source, "fixture", MAX_REVIEW_FILE_BYTES / 2),
+    /byte limit/u,
+  );
 });
 
 test("renders one HTML and removes both transient inputs on success", async (t) => {
@@ -237,6 +353,62 @@ test("renders one HTML and removes both transient inputs on success", async (t) 
   await assert.rejects(lstat(inputs.directory), { code: "ENOENT" });
 });
 
+test("validates without rendering or removing retryable inputs", async (t) => {
+  const review = await fixture();
+  const context = contextFor(review);
+  const inputs = await putInputs(t, review, context);
+  let writes = 0;
+
+  const result = await main(
+    [
+      "--input",
+      inputs.input,
+      "--context",
+      inputs.contextPath,
+      "--validate-only",
+    ],
+    {
+      collectChangeRequest: async () => clone(context),
+      readCurrentSnapshot: async () => clone(context),
+      writeReviewHtml: async () => {
+        writes += 1;
+        return { file: "unreachable" };
+      },
+    },
+  );
+
+  assert.deepEqual(result, { validated: true });
+  assert.equal(writes, 0);
+  assert.equal((await lstat(inputs.input)).isFile(), true);
+  assert.equal((await lstat(inputs.contextPath)).isFile(), true);
+});
+
+test("keeps inputs after a correctable validate-only model error", async (t) => {
+  const review = await fixture();
+  const context = contextFor(review);
+  review.quiz.questions = [];
+  const inputs = await putInputs(t, review, context);
+
+  await assert.rejects(
+    main(
+      [
+        "--input",
+        inputs.input,
+        "--context",
+        inputs.contextPath,
+        "--validate-only",
+      ],
+      {
+        collectChangeRequest: async () => clone(context),
+        readCurrentSnapshot: async () => clone(context),
+      },
+    ),
+    /ReviewModelV1 validation failed/u,
+  );
+  assert.equal((await lstat(inputs.input)).isFile(), true);
+  assert.equal((await lstat(inputs.contextPath)).isFile(), true);
+});
+
 test("refuses an initially stale review before calling the writer", async (t) => {
   const review = await fixture();
   const context = contextFor(review);
@@ -257,7 +429,45 @@ test("refuses an initially stale review before calling the writer", async (t) =>
       ],
       {
         collectChangeRequest: async () => changed,
-        readCurrentSnapshot: async () => changed,
+        writeReviewHtml: async () => {
+          writes += 1;
+          return { file: "unreachable" };
+        },
+      },
+    ),
+    /changed while Hope was preparing/u,
+  );
+  assert.equal(writes, 0);
+  await assert.rejects(lstat(inputs.directory), { code: "ENOENT" });
+});
+
+test("recollects the full Change Request and rejects a locally re-fingerprinted patch", async (t) => {
+  const review = await fixture();
+  const liveContext = contextFor(review);
+  const storedContext = clone(liveContext);
+  const firstPatch = storedContext.patches[0];
+  firstPatch.text = firstPatch.text.replace("missing_id", "missing_ix");
+  const firstPass = storedContext.analysisPlan.passes[0];
+  firstPass.fingerprint = calculateAnalysisPassFingerprint(firstPass, [firstPatch]);
+  storedContext.fingerprint = calculateChangeRequestFingerprint(storedContext);
+  review.changeRequest.analysisPlan = clone(storedContext.analysisPlan);
+  review.changeRequest.fingerprint = storedContext.fingerprint;
+  review.analysisCoverage.processedPasses[0].fingerprint = firstPass.fingerprint;
+  const inputs = await putInputs(t, review, storedContext);
+  let writes = 0;
+
+  await assert.rejects(
+    main(
+      [
+        "--input",
+        inputs.input,
+        "--context",
+        inputs.contextPath,
+        "--cleanup",
+      ],
+      {
+        collectChangeRequest: async () => clone(liveContext),
+        readCurrentSnapshot: async () => clone(liveContext),
         writeReviewHtml: async () => {
           writes += 1;
           return { file: "unreachable" };

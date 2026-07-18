@@ -1,7 +1,7 @@
 {
   "name": "hope",
   "version": "0.3.0-alpha",
-  "description": "Understand GitHub pull request changes before merge through explanation, a quiz, and an interactive review.",
+  "description": "Understand any supported GitHub pull request before review or merge through a clear explanation, key code, risks, an interactive model, and a quiz.",
   "author": {
     "name": "SeungIl",
     "url": "https://github.com/dkstm95"
@@ -9,17 +9,17 @@
   "homepage": "https://github.com/dkstm95/hope#readme",
   "repository": "https://github.com/dkstm95/hope",
   "license": "MIT",
-  "keywords": ["diff", "pull-request", "change-request", "code-review", "code-understanding", "learning", "microworld"],
+  "keywords": ["diff", "pull-request", "change-request", "code-review", "code-understanding", "learning", "interactive-review"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Hope",
-    "shortDescription": "Understand pull requests through active review",
-    "longDescription": "Turn an exact GitHub pull request snapshot into one safe offline review with visual explanation, a literate diff, an auto-scored quiz, and an optional interactive microworld.",
+    "shortDescription": "Understand a PR before review or merge",
+    "longDescription": "Give Hope a GitHub pull request URL. It creates one private offline review that explains what changed and why, maps the behavior, highlights risks and key code, lets you try important scenarios, and checks your understanding.",
     "developerName": "SeungIl",
     "category": "Engineering",
     "capabilities": ["Read", "Write", "Interactive"],
     "defaultPrompt": [
-      "Use $hope:diff with a GitHub pull request URL to create a visual, interactive change review."
+      "Use $hope:diff with a GitHub pull request URL to explain what changed, show the behavior, risks, and key code, let me try important scenarios, and check my understanding."
     ],
     "brandColor": "#5B5BD6",
     "composerIcon": "./assets/telescope.svg",
