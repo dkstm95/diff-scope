@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/dkstm95/hope/main/plugins/hope/skills/diff/references/change-request-v1.schema.json",
+  "title": "Hope ChangeRequestV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "provider",
+    "host",
+    "repository",
+    "id",
+    "url",
+    "title",
+    "description",
+    "author",
+    "state",
+    "reviewStage",
+    "isDraft",
+    "baseSha",
+    "headSha",
+    "mergeBaseSha",
+    "comparison",
+    "snapshotFingerprint",
+    "commitCount",
+    "commits",
+    "files",
+    "patches",
+    "coverage",
+    "exclusions",
+    "warnings",
+    "fingerprint"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "provider": { "const": "github" },
+    "host": { "const": "github.com" },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}$"
+    },
+    "id": { "type": "string", "pattern": "^[1-9][0-9]*$", "maxLength": 20 },
+    "url": {
+      "type": "string",
+      "pattern": "^https://github\\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]*$",
+      "maxLength": 300
+    },
+    "title": { "$ref": "#/$defs/nonEmptyText" },
+    "description": {
+      "type": "string",
+      "maxLength": 32768,
+      "pattern": "^[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]*$"
+    },
+    "author": { "$ref": "#/$defs/login" },
+    "state": { "enum": ["open", "merged", "closed"] },
+    "reviewStage": { "enum": ["draft", "ready", "historical", "abandoned"] },
+    "isDraft": { "type": "boolean" },
+    "baseSha": { "$ref": "#/$defs/commitSha" },
+    "headSha": { "$ref": "#/$defs/commitSha" },
+    "mergeBaseSha": { "$ref": "#/$defs/commitSha" },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fromSha", "toSha"],
+      "properties": {
+        "kind": { "const": "merge-base-to-head" },
+        "fromSha": { "$ref": "#/$defs/commitSha" },
+        "toSha": { "$ref": "#/$defs/commitSha" }
+      }
+    },
+    "snapshotFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "commitCount": { "type": "integer", "minimum": 1, "maximum": 250 },
+    "commits": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 250,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sha", "title", "author"],
+        "properties": {
+          "sha": { "$ref": "#/$defs/commitSha" },
+          "title": { "$ref": "#/$defs/nonEmptyText" },
+          "author": {
+            "anyOf": [{ "$ref": "#/$defs/login" }, { "type": "null" }]
+          }
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 80,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "previousPath",
+          "status",
+          "additions",
+          "deletions",
+          "bodyState"
+        ],
+        "properties": {
+          "path": { "$ref": "#/$defs/relativePath" },
+          "previousPath": {
+            "anyOf": [{ "$ref": "#/$defs/relativePath" }, { "type": "null" }]
+          },
+          "status": {
+            "enum": ["added", "modified", "deleted", "renamed", "copied", "type-changed"]
+          },
+          "additions": { "$ref": "#/$defs/count" },
+          "deletions": { "$ref": "#/$defs/count" },
+          "bodyState": {
+            "enum": [
+              "included",
+              "redacted",
+              "binary",
+              "generated-or-lockfile",
+              "secret-path",
+              "invalid-utf8",
+              "missing-patch",
+              "metadata-only",
+              "submodule",
+              "symlink",
+              "size-limit"
+            ]
+          }
+        }
+      }
+    },
+    "patches": {
+      "type": "array",
+      "maxItems": 80,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "text"],
+        "properties": {
+          "path": { "$ref": "#/$defs/relativePath" },
+          "text": { "type": "string", "maxLength": 262144 }
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "discoveredFiles",
+        "representedFiles",
+        "includedBodies",
+        "metadataOnlyBodies",
+        "additions",
+        "deletions",
+        "changedLines",
+        "analyzedChangedLines",
+        "patchBytes"
+      ],
+      "properties": {
+        "status": { "enum": ["complete", "partial", "blocked"] },
+        "discoveredFiles": { "$ref": "#/$defs/count" },
+        "representedFiles": { "$ref": "#/$defs/count" },
+        "includedBodies": { "$ref": "#/$defs/count" },
+        "metadataOnlyBodies": { "$ref": "#/$defs/count" },
+        "additions": { "$ref": "#/$defs/count" },
+        "deletions": { "$ref": "#/$defs/count" },
+        "changedLines": { "$ref": "#/$defs/count" },
+        "analyzedChangedLines": { "type": "integer", "minimum": 0, "maximum": 4000 },
+        "patchBytes": { "$ref": "#/$defs/count" }
+      }
+    },
+    "exclusions": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "reason"],
+        "properties": {
+          "path": { "$ref": "#/$defs/relativePath" },
+          "reason": { "$ref": "#/$defs/nonEmptyText" }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 40,
+      "items": { "$ref": "#/$defs/nonEmptyText" }
+    },
+    "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "$defs": {
+    "commitSha": { "type": "string", "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$" },
+    "count": { "type": "integer", "minimum": 0 },
+    "login": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[^\\u0000-\\u001F\\u007F]+$"
+    },
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]+$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?![~/])(?![A-Za-z]:)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!.*\\\\)(?!.*//)(?!\\s)(?!.*\\s$)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*[\\u0000-\\u001F\\u007F]).+$"
+    }
+  }
+}

@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.3.0-alpha - 2026-07-18
+
+Hope narrows its alpha to one job: helping a person understand a GitHub pull
+request before approval or merge.
+
+- Make `$hope:diff <GitHub PR URL>` the only public skill and defer pre-change
+  intent alignment until pull-request reviews reveal which context is repeatedly
+  missing.
+- Replace the local `HEAD -> working tree` boundary with a provider-independent
+  Change Request contract and a first GitHub pull-request adapter.
+- Analyze the pull request's merge-base-to-head change as one review across any
+  number of commits, for both the viewer's and another author's pull requests.
+- Bind every review to the captured base, merge-base, head, metadata, file set,
+  and canonical change fingerprint, and reject a snapshot that changes during
+  generation.
+- Replace the `artifact.json`, `explanation.md`, and `index.html` bundle with one
+  private, self-contained `hope-review.html`.
+- Add safe fixed-renderer visualizations, a literate diff, author questions,
+  three to five auto-scored questions, and an optional declarative microworld.
+- Keep internal Change Request context and Review Model files transient, refuse
+  to persist blocked collections, and provide path-restricted failure cleanup.
+- Bind declared excerpts to the collected PR description or commit subject,
+  bind literate-diff evidence to the same changed file, and forbid unverified
+  pass/fail claims while this alpha has no checkout or CI adapter.
+- Require only an active Codex subscription, Node.js 20, and authenticated
+  GitHub CLI access; no local repository, Git, OpenAI API key, cache, or database
+  is required.
+- Never post the generated review, merge the pull request, or apply a durable
+  knowledge candidate automatically.
+
 ## 0.2.0-alpha - 2026-07-17
 
 DiffScope becomes Hope and expands from post-change explanation to a connected

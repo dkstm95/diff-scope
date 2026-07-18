@@ -4,163 +4,169 @@
 
 <h1 align="center">Hope</h1>
 
-<p align="center"><strong>의도를 맞추고, 변경을 이해하고, 사람이 코드 안에 남게 하세요.</strong></p>
+<p align="center"><strong>변경을 보고, 이유를 이해하고, 사람이 코드 안에 남게 하세요.</strong></p>
 
 <p align="center"><a href="README.md">English</a></p>
 
-Hope는 AI가 코드를 작성하는 동안 사람이 방향과 이해를 잃지 않도록 돕는다.
-대화 기록 속에서 쉽게 사라지는 두 순간을 연결한다.
+Hope는 pull request를 승인하거나 머지하기 전에 사람이 변경을 이해하도록 돕는다.
+`$hope:diff`에 GitHub pull request URL을 주면 정확한 변경을 하나의 시각적이고
+인터랙티브한 review로 바꾼다. 코드 근거에 기반한 설명, 자동 채점 퀴즈, 동작을
+탐색하는 선택적 microworld가 포함된다.
 
-- `$hope:align`은 코딩 전에 목표, 결정, 제약, 비목표, 예상 시나리오를 확정한다.
-- `$hope:diff`는 승인된 의도를 정확한 로컬 변경과 연결하고, 실제 결과를 설명하고,
-  이해도를 확인하며, 동작을 직접 탐색하게 한다.
+Hope는 현재 활성 Codex 구독 세션 안에서 동작한다. OpenAI API 키, 모델 설정,
+별도 서버, 중첩 모델 호출, 캐시, 데이터베이스가 필요 없다.
 
-두 skill 모두 현재 활성 Codex 구독 세션 안에서 동작한다. API 키, 모델 설정,
-별도 서버, 중첩 모델 호출이 필요 없다.
-
-> **Alpha:** `v0.2.0-alpha`는 구독 사용자와 하나의 로컬 작업 단위만 지원한다.
-> Dogfooding 결과에 따라 인터페이스와 schema가 바뀔 수 있다.
+> **Alpha:** `v0.3.0-alpha`는 GitHub pull request에 집중한다. Dogfooding
+> 결과에 따라 인터페이스와 schema가 바뀔 수 있다.
 
 ## 설치
 
-Git, Node.js 20 이상, ChatGPT 구독으로 로그인한 Codex가 필요하다.
+다음이 필요하다.
 
-DiffScope `v0.1.0-alpha`를 설치했다면 Hope를 설치하기 전에 기존 플러그인과
-marketplace를 제거한다.
+- Node.js 20 이상
+- 대상 pull request에 접근할 수 있도록 인증한
+  [GitHub CLI](https://cli.github.com/) (`gh auth login`)
+- ChatGPT 구독으로 로그인한 Codex
+
+태그가 지정된 marketplace에서 Hope를 설치한다.
 
 ```bash
+codex plugin marketplace add dkstm95/hope --ref v0.3.0-alpha
+codex plugin add hope@hope
+```
+
+이전 Hope 또는 DiffScope alpha가 설치되어 있다면 기존 plugin과 marketplace를
+제거한 뒤 위 명령을 실행한다.
+
+```bash
+codex plugin remove hope@hope
+codex plugin marketplace remove hope
 codex plugin remove diff-scope@diff-scope
 codex plugin marketplace remove diff-scope
 ```
 
-이후 Hope를 설치한다.
-
-```bash
-codex plugin marketplace add dkstm95/hope --ref v0.2.0-alpha
-codex plugin add hope@hope
-```
-
-설치 후 새 Codex 작업을 시작해야 `$hope:align`과 `$hope:diff`가 로드된다.
+설치 후 새 Codex 작업을 시작해야 `$hope:diff`가 로드된다.
 
 ## 사용
 
-### 1. 코딩 전에 의도 맞추기
-
-깨끗한 working tree에서 호출한다.
+### 1. Hope에 pull request URL 전달하기
 
 ```text
-$hope:align
+$hope:diff https://github.com/owner/repository/pull/123
 ```
 
-원하는 변경을 설명한다. Hope와 Codex는 사용자의 판단이 필요한 미해결 선택만
-드러내며, 결정 카드 수에 임의의 상한을 두지 않는다. 사용자가 명시적으로
-승인하면 Hope는 변경 불가능한 intent revision을 비공개 OS 임시 디렉터리에
-기록하고 현재 `HEAD`에 연결한다.
+Hope는 기존 `gh` 인증으로 GitHub pull request를 조회하고 merge base에서 head까지
+비교 범위를 수집한다. 로컬 clone이나 checkout은 필요 없다. 여러 commit으로
+구성된 pull request도 하나의 Change Request이자 하나의 review로 다룬다.
 
-반환된 `intent.json` 경로를 보관한다. `$hope:diff`는 이 입력을 사용해 구현 이후
-의도를 재구성하지 않고, 실제로 승인했던 내용과 코드를 비교한다.
+본인이 만든 pull request와 다른 사람이 만든 pull request에 같은 흐름을 사용한다.
+Open, draft, merged, closed 상태를 review에 그대로 표시하며, review 준비가 된 open
+pull request가 이번 alpha의 기본 사용 사례다.
 
-### 2. 하나의 작업 단위 구현하기
+Hope는 base, merge-base, head SHA를 기록한다. 렌더링 전후에 pull request를 다시
+확인하고, 생성 중 force-push, base 갱신, 관련 metadata 변경이 생기면 서로 다른
+snapshot을 섞어 보여주지 않고 결과를 취소한다.
 
-평소처럼 Codex와 작업한다. 하나의 일관된 경계를 검토할 수 있도록 관련 없는
-변경은 working tree에서 분리한다.
+### 2. Hope Review 탐색하기
 
-구현을 시작한 뒤 요구 의도가 바뀌어도 승인한 revision을 실제 코드에 맞춰
-다시 작성하지 않는다. 이 alpha는 dirty working tree에서 대체 revision을
-확정하지 못한다. 사용자의 통제 아래 현재 작업을 완료·되돌리기·분리한 뒤 다음
-clean 경계에서 `$hope:align`을 실행하거나, `$hope:diff`가 현재 불일치를 검토 대상으로
-보고하게 한다.
-
-### 3. 승인하거나 머지하기 전에 이해하기
-
-작업 단위 구현을 마치면 호출한다.
+Hope는 비공개 self-contained 파일 하나를 반환한다.
 
 ```text
-$hope:diff
+hope-review.html
 ```
 
-승인된 `intent.json`이 있다면 그 경로를 `$hope:diff`에 전달한다. Hope는 정확한
-`HEAD -> working tree` snapshot을 수집하고, review를 변경 불가능한 intent
-revision과 변경 fingerprint 모두에 연결한다. 이후 충족된 의도, 사용자의 검토가
-필요한 이탈, 해결되지 않은 불일치, 코드 근거를 구분한다.
+로컬 browser에서 열면 된다. 네트워크 연결 없이 다음 내용을 볼 수 있다.
 
-`$hope:align` 없이 `$hope:diff`만 사용할 수도 있다. 이 경우 코드 근거를 바탕으로 변경을
-설명하고 가르칠 수 있지만, 구현이 사전에 승인된 의도와 일치한다고 주장할 수는
-없다.
+- pull request에 선언된 목표와 코드에서 관찰한 실제 동작
+- 변경을 명확하게 만드는 before/after panel, flow, decision table 시각화
+- 선택한 코드 근거와 설명을 연결한 literate diff
+- 결정, 불변식, 위험, 미확인 사항, 명시적인 검증 한계
+- 예측과 위험 추론을 포함한 자동 채점 문제 3~5개
+- 탐색이 이해에 도움이 될 때만 제공하는 interactive microworld
+- 작성자에게 물어볼 가치가 있는 질문
+- 프로젝트의 장기 지식으로 승격할 수 있는 선택적 후보
 
-## 학습 번들
+Microworld는 의도적으로 선택 사항이다. 다이어그램과 퀴즈가 더 적합한 변경에
+장식용 simulator를 만들지 않는다.
 
-Hope는 기본적으로 비공개 임시 디렉터리에 하나의 번들을 만든다.
+고정 UI는 영어를 사용하고, AI가 작성한 설명과 학습 내용은 사용자의 작업 언어를
+따른다.
 
-- `artifact.json`: 전달된 intent revision과 정확한 변경에 연결해 검증한 원본
-  데이터
-- `explanation.md`: 목표, 인과 흐름, 의도 비교, 결정, 위험, 근거
-- `index.html`: 설명, 자동 채점 퀴즈, 오프라인 인터랙티브 마이크로월드
+## 산출물 관리가 필요 없는 하나의 review
 
-번들의 고정 UI와 label은 영어를 사용한다. AI가 작성한 설명, 퀴즈 문항,
-마이크로월드 내용은 사용자의 작업 언어를 따른다.
+Hope는 내부에서 크기가 제한된 구조화 context와 검증된 review model을 사용하지만
+모두 일시적이다. 렌더링 또는 처리된 실패 후 제거하며 `intent.json`,
+`artifact.json`, 별도 Markdown 설명을 사용자 산출물로 만들지 않는다.
 
-번들은 review를 돕지만 퀴즈 통과가 완전한 이해를 증명하지는 않는다. Working
-tree가 바뀌면 이전 review는 stale 상태이며 현재 결과처럼 제시해서는 안 된다.
+기본 HTML은 비공개 OS 임시 디렉터리에 둔다. Hope는 다음 작업을 하지 않는다.
 
-Hope는 이 번들을 commit하지 않고, `.hope/` archive를 만들지 않고,
-`.gitignore`를 수정하거나 결과를 게시하지 않는다. 생성된 설명, 퀴즈 상태,
-마이크로월드는 프로젝트 문서가 아니라 필요할 때 다시 만들 수 있는 view다.
-감사나 교육 목적으로 명시적으로 고정하지 않았다면 merge 후 `artifact.json`을
-포함한 번들 전체를 폐기한다.
+- `.hope/` 디렉터리 생성 또는 `.gitignore` 수정
+- 캐시, registry, database, 검색용 review index 유지
+- review commit 또는 pull request 첨부
+- comment 게시, approve, close, merge
+- 지식 후보를 대상 저장소에 자동 반영
+
+사용자가 명시적으로 요청하면 HTML을 원하는 경로로 export할 수 있다. 이 경우에도
+기존 파일을 덮어쓰거나 자동 게시하지 않는다.
+
+Review는 background에서 최신 상태를 유지하는 문서가 아니라 수집한 pull request
+snapshot에 연결된 view다. Head나 base가 바뀌면 `$hope:diff`를 다시 실행한다. 기본
+임시 review는 프로젝트에 정리할 파일을 만들지 않는다. 검토가 끝나면 닫아도 되며
+OS의 임시 파일 정책에 따라 회수된다. 명시적으로 export한 사본의 보존 여부만
+사용자가 결정한다. 사람과 AI 중 누가 머지해도 되며 Hope는 머지 작업에 관여하지
+않는다.
 
 ## 문서 부채 없이 인지 부채 줄이기
 
-AI가 만든 모든 산출물을 머지 후에도 남기면 코드와 어긋날 수 있는 또 하나의
-유지보수 대상이 된다. Hope는 작업 중 학습 도구와 장기 보존할 지식을 구분한다.
+생성된 모든 설명을 머지 후에도 남기면 코드와 어긋날 수 있는 또 하나의 유지보수
+대상이 된다. Hope는 일회성 학습 view와 프로젝트의 장기 지식을 구분한다.
 
-머지 전에 `$hope:diff`는 승격할 가치가 있는 지식 후보를 제시할 수 있다. Git과
-코드만으로 복원하기 어렵고, 미래 판단에 영향을 주며, 머지 후에도 유효하고,
-사람이 확인한 내용만 기존 SSOT에 반영한다.
+Pull request는 변경 당시의 역사적 이유를 보존한다. 현재 시스템의 진실은 코드,
+테스트, 타입, 프로젝트의 기존 SSOT 문서에 둔다. Hope Review는 승격할 지식 후보를
+제안할 수 있지만 직접 반영하지 않는다. Git과 코드만으로 복원하기 어렵고, 미래
+판단에 영향을 주며, 머지 후에도 유효하고, 사람이 확인한 내용만 승격한다.
 
 - 동작 계약과 경계 사례는 테스트, 타입, assertion, fixture에 둔다.
 - 국소적이고 비자명한 이유는 해당 코드 가까이에 둔다.
 - 아키텍처 결정은 프로젝트의 ADR이나 설계 문서에 둔다.
 - 운영 제약은 runbook에 둔다.
-- 작은 변경의 이유는 commit이나 pull request에 둔다.
+- 작은 변경의 이유는 pull request에 둔다.
 
-개인 퀴즈 답변과 생성된 HTML은 저장소에 넣지 않는다. 원칙은 **의도는
-보존하고, 설명은 다시 만들며, 이해는 실제로 확인한다**이다.
+원칙은 **장기 의도는 보존하고, 설명은 다시 만들며, 이해는 실제로 확인한다**이다.
 
 ## Alpha 범위
 
-`$hope:align`은 깨끗한 working tree에서만 intent를 확정한다. `$hope:diff`는 다음 범위만
-분석한다.
+Hope는 입력을 provider와 독립적인 **Change Request**로 모델링한다. 첫 adapter는
+인증된 GitHub CLI를 통해 GitHub pull request를 지원한다. Git, 로컬 저장소,
+OpenAI API 키는 필요 없다. 다른 forge, OpenAI API 생성, CI batch 생성, pull
+request 자동 게시 기능은 이번 alpha 범위에 포함하지 않는다.
 
-```text
-HEAD -> 현재 working tree
-```
-
-staged, unstaged, 안전한 untracked 텍스트를 포함한다. 현재 working tree에는
-완료된 작업 단위 하나만 있어야 한다.
-
-추적된 변경을 숨길 수 있는 `skip-worktree`와 `assume-unchanged` index flag를
-거부하므로 sparse worktree는 이번 alpha 범위에 포함하지 않는다.
-
-commit range, branch, pull request, remote 또는 타인의 변경, API provider, CI
-batch 생성, binary, generated file, lockfile은 이번 릴리스 지원 범위가 아니다.
+Collector는 파일 수, 분석한 변경 줄, byte, 시간을 제한한다. Binary, generated,
+lockfile, submodule, rename-only, 민감한 path, 가려진 내용은 명확한 metadata-only
+coverage로 표시할 수 있다. 크기 한도로 임의의 일부 이야기만 남거나 설명할 text가
+하나도 없으면 review를 만들지 않는다.
 
 ## 안전 경계
 
-선택된 범위의 저장소 내용은 활성 Codex 서비스를 통해 처리된다. 로컬
-collector는 파일 수, 변경 줄, byte, 시간을 제한하고, 일반적인 secret 경로를
-차단하며, 의심되는 credential을 가리고, 외부 Git diff helper를 비활성화한다.
-저장소 내용은 신뢰하지 않는 입력으로 취급한다.
+Pull request의 title, body, commit 제목, path, patch, 저장소 내용은 신뢰하지 않는
+입력이다. Hope는 그 안의 지시를 따르지 않는다. 사용자의 GitHub 계정이 접근할 수
+있는 private pull request의 source를 포함해 선택된 source는 활성 Codex 서비스를
+통해 처리된다.
 
-최종 HTML은 고정 runtime으로 렌더링한다. 모델이 작성한 HTML, CSS,
-JavaScript, SVG, URL, shell command를 실행하지 않고 네트워크도 필요 없다.
-Secret 탐지는 보조 장치일 뿐 완전한 보장이 아니므로 민감한 저장소에서는
-선택된 범위를 먼저 확인해야 한다.
+Collector는 위험한 GitHub environment redirect를 제거하고, 외부 작업의 크기와
+시간을 제한하고, 일반적인 secret path를 차단하고, 의심되는 credential을 가린다.
+Hope가 GitHub token을 직접 읽거나 쓰지 않으며 인증은 `gh`가 관리한다.
+
+최종 HTML은 고정 runtime으로 렌더링한다. 모델이 작성한 HTML, CSS, JavaScript,
+SVG, URL, shell command를 실행하지 않고 raw patch를 포함하지 않는다. Secret
+탐지는 보조 장치일 뿐 완전한 보장이 아니므로 민감한 저장소에서는 pull request
+범위를 먼저 확인해야 한다.
 
 ## 개발
 
-deterministic collector, validator, renderer, quiz, microworld runtime은 Node.js
-built-in만 사용한다. 테스트는 Codex나 네트워크를 호출하지 않는다.
+결정론적 adapter 경계, collector, validator, renderer, quiz, microworld runtime은
+Node.js built-in만 사용한다. 테스트는 fake GitHub adapter를 사용하며 Codex나
+network를 호출하지 않는다.
 
 ```bash
 npm test
@@ -171,9 +177,8 @@ npm run check
 .agents/plugins/marketplace.json     Codex marketplace
 plugins/hope/                        배포 플러그인
   .codex-plugin/plugin.json
-  skills/align/                      승인된 의도 workflow
-  skills/diff/                       변경 이해 workflow와 runtime
-test/                                deterministic contract와 runtime 테스트
+  skills/diff/                       pull request 이해 workflow
+test/                                결정론적 contract와 runtime 테스트
 tools/check-release.mjs              릴리스 일관성 검사
 ```
 

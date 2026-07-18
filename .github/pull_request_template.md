@@ -1,21 +1,23 @@
-## Intent
+## Change Request
 
-- Alignment basis (`$hope:align` revision or no prior intent):
-- Approved goal, decisions, constraints, and non-goals:
+- Goal:
+- Why this change is needed:
+- Non-goals:
 
-## Change
+## Behavior
 
-- What changed:
-- Why:
+- Before -> after:
+- Causal path:
 
 ## Understanding
 
-- Intent outcome (fulfilled, deviation needing review, unresolved mismatch):
-- Behavior path (before -> after):
+- Important decision and tradeoff:
 - Invariant or risk:
+- Unknown or question for the author:
 - Reviewer prediction/check:
-- Durable knowledge candidate and existing SSOT, or none:
+- Durable knowledge candidate and existing SSOT, or `none`:
 
 ## Validation
 
+- Commands that actually ran:
 - [ ] `npm run check`

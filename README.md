@@ -4,173 +4,180 @@
 
 <h1 align="center">Hope</h1>
 
-<p align="center"><strong>Align intent. Understand change. Keep the human in the code.</strong></p>
+<p align="center"><strong>See the change. Understand the why. Keep the human in the code.</strong></p>
 
 <p align="center"><a href="README.ko.md">한국어</a></p>
 
-Hope helps people stay oriented while AI writes code. It connects two moments
-that are usually lost in chat history:
+Hope helps people understand a pull request before they approve or merge it. Give
+`$hope:diff` a GitHub pull request URL and it turns the exact change into one
+visual, interactive review: an evidence-based explanation, an auto-scored quiz,
+and an optional microworld for exploring behavior.
 
-- `$hope:align` establishes the goal, decisions, constraints, non-goals, and expected
-  scenarios before coding;
-- `$hope:diff` binds that approved intent to the exact local change, explains what
-  actually happened, checks understanding, and makes the behavior explorable.
+Hope runs inside your active Codex subscription session. It needs no OpenAI API
+key, model configuration, server, nested model call, cache, or database.
 
-Both skills run inside your active Codex subscription session. Hope needs no API
-key, model configuration, server, or nested model call.
-
-> **Alpha:** `v0.2.0-alpha` is subscription-only and targets one local work unit.
-> Interfaces and schemas may change as the workflow is dogfooded.
+> **Alpha:** `v0.3.0-alpha` focuses on GitHub pull requests. Interfaces and
+> schemas may change as this workflow is dogfooded.
 
 ## Install
 
-Requirements: Git, Node.js 20 or newer, and Codex signed in with a ChatGPT
-subscription.
+Requirements:
 
-If you installed DiffScope `v0.1.0-alpha`, remove its plugin and marketplace
-before installing Hope:
+- Node.js 20 or newer;
+- [GitHub CLI](https://cli.github.com/) authenticated with access to the pull
+  request (`gh auth login`);
+- Codex signed in with a ChatGPT subscription.
+
+Install Hope from its tagged marketplace:
 
 ```bash
+codex plugin marketplace add dkstm95/hope --ref v0.3.0-alpha
+codex plugin add hope@hope
+```
+
+If an earlier Hope or DiffScope alpha is installed, remove its plugin and
+marketplace first, then run the commands above:
+
+```bash
+codex plugin remove hope@hope
+codex plugin marketplace remove hope
 codex plugin remove diff-scope@diff-scope
 codex plugin marketplace remove diff-scope
 ```
 
-Then install Hope:
-
-```bash
-codex plugin marketplace add dkstm95/hope --ref v0.2.0-alpha
-codex plugin add hope@hope
-```
-
-Start a new Codex task after installation so `$hope:align` and `$hope:diff` are loaded.
+Start a new Codex task after installation so `$hope:diff` is loaded.
 
 ## Use
 
-### 1. Align before coding
-
-Begin with a clean working tree, then invoke:
+### 1. Give Hope the pull request URL
 
 ```text
-$hope:align
+$hope:diff https://github.com/owner/repository/pull/123
 ```
 
-Describe what you want to change. Hope and Codex surface only unresolved choices
-that need your judgment; there is no arbitrary maximum number of decision cards.
-After your explicit approval, Hope writes an immutable intent revision to a
-private OS temporary directory and binds it to the current `HEAD`.
+Hope resolves the GitHub pull request through your existing `gh`
+authentication and collects the pull request comparison from its merge base to
+its head. No local clone or checkout is required. A pull request with many
+commits is still one change request and one review.
 
-Keep the returned `intent.json` path. It is the input that lets `$hope:diff` compare
-the implementation with what you actually approved instead of reconstructing
-intent after the fact.
+The same flow works for your own pull request and another author's pull request.
+Open, draft, merged, and closed pull requests retain their real lifecycle state
+in the review; ready-to-review open pull requests are the primary alpha case.
 
-### 2. Implement one work unit
+Hope records the base, merge-base, and head SHAs. It rechecks the pull request
+before and after rendering. A force-push, base update, or relevant metadata
+change during generation cancels the result instead of presenting a mixed
+snapshot.
 
-Work with Codex normally. Keep unrelated changes outside the working tree so the
-review has one coherent boundary.
+### 2. Explore the Hope Review
 
-If the requested intent changes after implementation starts, never rewrite the
-approved revision to fit the code. This alpha cannot finalize a replacement
-from a dirty tree: either finish, revert, or separate the current work under the
-user's control and run `$hope:align` from the next clean boundary, or let `$hope:diff`
-report the current mismatch for review.
-
-### 3. Understand before approval or merge
-
-When the work unit is complete, invoke:
+Hope returns one private, self-contained file:
 
 ```text
-$hope:diff
+hope-review.html
 ```
 
-Give `$hope:diff` the approved `intent.json` path when one exists. Hope collects the
-exact `HEAD -> working tree` snapshot, binds the review to both the immutable
-intent revision and the change fingerprint, then identifies fulfilled intent,
-deviations that need your review, unresolved mismatches, and code evidence.
+Open it locally in a browser. It needs no network connection and contains:
 
-`$hope:diff` also works without `$hope:align`. In that fallback mode it explains and
-teaches the change from code evidence, but it cannot claim that the
-implementation matches a previously approved intent.
+- the pull request's declared goal and the behavior observed in code;
+- visual before/after panels, flows, or decision tables when they clarify the
+  change;
+- a literate diff that connects selected code evidence to the explanation;
+- decisions, invariants, risks, unknowns, and explicit verification limits;
+- three to five auto-scored questions, including prediction and risk reasoning;
+- an interactive microworld when the behavior benefits from exploration;
+- questions worth asking the author;
+- optional candidates for durable project knowledge.
 
-## The learning bundle
+The microworld is intentionally optional. A change that is better taught by a
+diagram and quiz does not receive a decorative simulator.
 
-Hope writes one private temporary bundle by default:
+The fixed interface uses English. Model-authored explanation and teaching
+content follow the user's working language.
 
-- `artifact.json` — validated source data bound to the exact intent revision, if
-  supplied, and the exact collected change;
-- `explanation.md` — the goal, causal path, intent comparison, decisions, risks,
-  and evidence;
-- `index.html` — the explanation, auto-scored quiz, and offline interactive
-  microworld.
+## One review, no artifact management
 
-The bundle's fixed interface and labels use English. Model-authored
-explanations, quiz text, and microworld content follow the user's working
-language.
+Hope uses bounded structured context and a validated review model internally,
+but they are transient. It removes them after rendering or a handled failure
+and does not expose `intent.json`, `artifact.json`, or a separate Markdown
+explanation.
 
-The bundle supports review; passing the quiz does not prove complete
-understanding. If the working tree changes, the old review is stale and must not
-be presented as current.
+By default, the HTML lives in a private OS temporary directory. Hope does not:
 
-Hope does not commit this bundle, create a `.hope/` archive, edit `.gitignore`,
-or publish anything. After merge, discard the entire bundle—including
-`artifact.json`—unless you explicitly pin it for audit or education. Generated
-explanations, quiz state, and microworld files are disposable views, not project
-documentation.
+- create a `.hope/` directory or edit `.gitignore`;
+- keep a cache, registry, database, or searchable review index;
+- commit or attach the review to the pull request;
+- post comments, approve, close, or merge the pull request;
+- write knowledge candidates into the target repository.
+
+The user may explicitly request an exported HTML file. Hope still refuses to
+overwrite an existing path or publish it automatically.
+
+The review is bound to the captured pull request snapshot, not kept current in
+the background. If the head or base changes, run `$hope:diff` again. A default
+temporary review creates no project cleanup work: close it when finished and let
+the operating system reclaim the temporary location. If you explicitly export
+a copy, you control its retention. A person or an AI may perform the merge; Hope
+is not part of that operation.
 
 ## Reduce cognitive debt without creating document debt
 
-Keeping every AI-generated artifact after merge would create another body of
-material that can drift from the code. Hope instead separates temporary learning
-tools from durable knowledge.
+Keeping every generated explanation after merge creates another body of
+material that can drift from the code. Hope therefore separates a disposable
+learning view from durable project knowledge.
 
-Before merge, `$hope:diff` can identify knowledge worth promoting. Promote it only
-when it is hard to reconstruct, likely to affect a future decision, still valid
-after the merge, and confirmed by a human. Put it in an existing source of truth:
+The pull request preserves the historical reason for a change. Current system
+truth remains in code, tests, types, and the project's existing source-of-truth
+documentation. A Hope Review may suggest knowledge worth promoting, but it never
+applies that suggestion. Promote an item only when it is difficult to
+reconstruct, likely to affect a future decision, still true after merge, and
+confirmed by a human:
 
 - behavior contracts and edge cases belong in tests, types, assertions, or
   fixtures;
 - local, non-obvious rationale belongs next to the code;
 - architectural decisions belong in the project's ADR or design documentation;
 - operational constraints belong in its runbook;
-- small change rationale belongs in the commit or pull request.
+- small change rationale belongs in the pull request.
 
-Personal quiz answers and generated HTML do not belong in the repository. The
-principle is: **preserve intent, regenerate explanations, require
+The principle is: **preserve durable intent, regenerate explanations, require
 understanding.**
 
 ## Alpha scope
 
-`$hope:align` finalizes only from a clean working tree. `$hope:diff` analyzes only:
+Hope models the input as a provider-independent **Change Request**. The first
+adapter supports GitHub pull requests through the authenticated GitHub CLI. Git,
+a local repository, and an OpenAI API key are not required. Other forges, OpenAI
+API generation, CI batch generation, and automatic PR publication are outside
+this alpha.
 
-```text
-HEAD -> current working tree
-```
-
-That includes staged, unstaged, and safe untracked text files. This alpha assumes
-the working tree contains one completed work unit.
-
-Hope refuses `skip-worktree` and `assume-unchanged` index flags because they can
-hide tracked changes; sparse worktrees are therefore outside this alpha.
-
-Commit ranges, branches, pull requests, remote or other-author changes, API
-providers, CI batch generation, binary files, generated files, and lockfiles are
-outside this release's supported scope.
+The collector bounds files, analyzed lines, bytes, and time. Binary, generated,
+lockfile, submodule, rename-only, sensitive-path, and redacted content may appear
+as clearly labeled metadata-only coverage. Hope blocks a review when size limits
+would produce an arbitrary partial story or when no explainable text remains.
 
 ## Safety boundary
 
-Repository contents in the selected scope are processed by the active Codex
-service. The local collectors bound files, changed lines, bytes, and time; block
-common secret paths; redact suspected credentials; disable external Git diff
-helpers; and treat the repository as untrusted input.
+Pull request titles, bodies, commit subjects, paths, patches, and repository
+contents are untrusted input. Hope never follows instructions found in them. Selected
+source is processed by the active Codex service, including source from a private
+pull request that your GitHub account can access.
 
-The final HTML is rendered from a fixed runtime. It does not execute
-model-authored HTML, CSS, JavaScript, SVG, URLs, or shell commands, and it needs
-no network connection. Secret detection is a guardrail, not a guarantee, so
-review the selected scope before using Hope on sensitive repositories.
+The collector strips unsafe GitHub environment redirects, bounds all external
+work, blocks common secret paths, and redacts suspected credentials. Hope never
+reads or writes your GitHub token directly. Authentication remains owned by
+`gh`.
+
+The final HTML is rendered by a fixed runtime. It does not execute
+model-authored HTML, CSS, JavaScript, SVG, URLs, or shell commands, and it does
+not embed raw patches. Secret detection is a guardrail, not a guarantee, so
+review the pull request scope before using Hope on sensitive repositories.
 
 ## Develop
 
-The deterministic collectors, validators, renderer, quiz, and microworld runtime
-use only Node.js built-ins. Tests do not call Codex or the network.
+The deterministic adapter boundary, collector, validators, renderer, quiz, and
+microworld runtime use only Node.js built-ins. Tests use fake GitHub adapters and
+do not call Codex or the network.
 
 ```bash
 npm test
@@ -183,8 +190,7 @@ Repository layout:
 .agents/plugins/marketplace.json     Codex marketplace
 plugins/hope/                        distributable plugin
   .codex-plugin/plugin.json
-  skills/align/                      approved intent workflow
-  skills/diff/                       post-change teaching workflow and runtime
+  skills/diff/                       pull-request understanding workflow
 test/                                deterministic contract and runtime tests
 tools/check-release.mjs              release/package consistency checks
 ```

@@ -1,0 +1,673 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/dkstm95/hope/main/plugins/hope/skills/diff/references/review-model-v1.schema.json",
+  "title": "Hope ReviewModelV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "title",
+    "changeRequest",
+    "background",
+    "overview",
+    "workstreams",
+    "literateDiff",
+    "visuals",
+    "visualOmissionReason",
+    "invariants",
+    "risks",
+    "decisions",
+    "verification",
+    "authorQuestions",
+    "quiz",
+    "microworld",
+    "ssotCandidates",
+    "evidence"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "title": { "$ref": "#/$defs/text" },
+    "changeRequest": { "$ref": "#/$defs/changeRequestBinding" },
+    "background": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "overview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "observableChanges", "beforeAfter"],
+      "properties": {
+        "summary": { "$ref": "#/$defs/claim" },
+        "observableChanges": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/claim" }
+        },
+        "beforeAfter": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/beforeAfter" }
+        }
+      }
+    },
+    "workstreams": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/workstream" }
+    },
+    "literateDiff": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 40,
+      "items": { "$ref": "#/$defs/literateDiff" }
+    },
+    "visuals": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/beforeAfterVisual" },
+          { "$ref": "#/$defs/flowVisual" },
+          { "$ref": "#/$defs/decisionTableVisual" }
+        ]
+      }
+    },
+    "visualOmissionReason": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/text" }]
+    },
+    "invariants": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "risks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "decisions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/decision" }
+    },
+    "verification": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/verification" }
+    },
+    "authorQuestions": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/authorQuestion" }
+    },
+    "quiz": { "$ref": "#/$defs/quiz" },
+    "microworld": {
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/microworld" }]
+    },
+    "ssotCandidates": {
+      "type": "array",
+      "maxItems": 10,
+      "items": { "$ref": "#/$defs/ssotCandidate" }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 240,
+      "items": { "$ref": "#/$defs/evidence" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F\\u007F]+$"
+    },
+    "sha": {
+      "type": "string",
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^(?![~/])(?![A-Za-z]:)(?![A-Za-z][A-Za-z0-9+.-]*:)(?!.*\\\\)(?!.*//)(?!\\s)(?!.*\\s$)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*[\\u0000-\\u001F\\u007F]).+$"
+    },
+    "idList": {
+      "type": "array",
+      "maxItems": 30,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "exclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "reason"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "reason": { "$ref": "#/$defs/text" }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "discoveredFiles",
+        "representedFiles",
+        "includedBodies",
+        "metadataOnlyBodies",
+        "additions",
+        "deletions",
+        "changedLines",
+        "analyzedChangedLines",
+        "patchBytes"
+      ],
+      "properties": {
+        "status": { "enum": ["complete", "partial", "blocked"] },
+        "discoveredFiles": { "type": "integer", "minimum": 0 },
+        "representedFiles": { "type": "integer", "minimum": 0 },
+        "includedBodies": { "type": "integer", "minimum": 0 },
+        "metadataOnlyBodies": { "type": "integer", "minimum": 0 },
+        "additions": { "type": "integer", "minimum": 0 },
+        "deletions": { "type": "integer", "minimum": 0 },
+        "changedLines": { "type": "integer", "minimum": 0 },
+        "analyzedChangedLines": { "type": "integer", "minimum": 0, "maximum": 4000 },
+        "patchBytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fromSha", "toSha"],
+      "properties": {
+        "kind": { "const": "merge-base-to-head" },
+        "fromSha": { "$ref": "#/$defs/sha" },
+        "toSha": { "$ref": "#/$defs/sha" }
+      }
+    },
+    "changeRequestBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "repository",
+        "id",
+        "url",
+        "title",
+        "author",
+        "state",
+        "reviewStage",
+        "isDraft",
+        "baseSha",
+        "headSha",
+        "mergeBaseSha",
+        "comparison",
+        "commitCount",
+        "fingerprint",
+        "coverage",
+        "warnings",
+        "exclusions",
+        "files"
+      ],
+      "properties": {
+        "provider": { "const": "github" },
+        "repository": { "type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}$" },
+        "id": { "type": "string", "pattern": "^[1-9][0-9]*$", "maxLength": 20 },
+        "url": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9_.-]{1,100}/pull/[1-9][0-9]*$", "maxLength": 300 },
+        "title": { "$ref": "#/$defs/text" },
+        "author": { "$ref": "#/$defs/text" },
+        "state": { "enum": ["open", "closed", "merged"] },
+        "reviewStage": { "enum": ["draft", "ready", "historical", "abandoned"] },
+        "isDraft": { "type": "boolean" },
+        "baseSha": { "$ref": "#/$defs/sha" },
+        "headSha": { "$ref": "#/$defs/sha" },
+        "mergeBaseSha": { "$ref": "#/$defs/sha" },
+        "comparison": { "$ref": "#/$defs/comparison" },
+        "commitCount": { "type": "integer", "minimum": 1, "maximum": 250 },
+        "fingerprint": { "$ref": "#/$defs/fingerprint" },
+        "coverage": { "$ref": "#/$defs/coverage" },
+        "warnings": {
+          "type": "array",
+          "maxItems": 40,
+          "items": { "$ref": "#/$defs/text" }
+        },
+        "exclusions": {
+          "type": "array",
+          "maxItems": 100,
+          "items": { "$ref": "#/$defs/exclusion" }
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 80,
+          "items": { "$ref": "#/$defs/changeFile" }
+        }
+      }
+    },
+    "changeFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "previousPath", "status", "additions", "deletions", "bodyState"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "previousPath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/relativePath" }] },
+        "status": { "enum": ["added", "modified", "deleted", "renamed", "copied", "type-changed"] },
+        "additions": { "type": "integer", "minimum": 0 },
+        "deletions": { "type": "integer", "minimum": 0 },
+        "bodyState": { "enum": ["included", "redacted", "binary", "generated-or-lockfile", "secret-path", "invalid-utf8", "missing-patch", "submodule", "symlink", "size-limit", "metadata-only"] }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "basis", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "$ref": "#/$defs/text" },
+        "basis": { "enum": ["declared", "observed", "inferred", "unknown"] },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "beforeAfter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "area", "before", "after", "why", "basis", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "area": { "$ref": "#/$defs/text" },
+        "before": { "$ref": "#/$defs/text" },
+        "after": { "$ref": "#/$defs/text" },
+        "why": { "$ref": "#/$defs/text" },
+        "basis": { "enum": ["declared", "observed", "inferred", "unknown"] },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "workstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "summary", "steps", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "$ref": "#/$defs/text" },
+        "summary": { "$ref": "#/$defs/text" },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 30,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "component", "behavior", "basis", "evidenceIds"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "component": { "$ref": "#/$defs/text" },
+              "behavior": { "$ref": "#/$defs/text" },
+              "basis": { "enum": ["declared", "observed", "inferred", "unknown"] },
+              "evidenceIds": { "$ref": "#/$defs/idList" }
+            }
+          }
+        },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "literateDiff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "role", "changes"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "path": { "$ref": "#/$defs/relativePath" },
+        "role": { "$ref": "#/$defs/text" },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "headline", "explanation", "evidenceIds"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "headline": { "$ref": "#/$defs/text" },
+              "explanation": { "$ref": "#/$defs/text" },
+              "evidenceIds": { "$ref": "#/$defs/idList" }
+            }
+          }
+        }
+      }
+    },
+    "visualBase": {
+      "type": "object",
+      "required": ["id", "kind", "title", "caption", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "enum": ["before-after", "flow", "decision-table"] },
+        "title": { "$ref": "#/$defs/text" },
+        "caption": { "$ref": "#/$defs/text" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "beforeAfterVisual": {
+      "allOf": [
+        { "$ref": "#/$defs/visualBase" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "kind", "title", "caption", "evidenceIds", "items"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "kind": { "const": "before-after" },
+            "title": { "$ref": "#/$defs/text" },
+            "caption": { "$ref": "#/$defs/text" },
+            "evidenceIds": { "$ref": "#/$defs/idList" },
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 12,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["label", "before", "after"],
+                "properties": {
+                  "label": { "$ref": "#/$defs/text" },
+                  "before": { "$ref": "#/$defs/text" },
+                  "after": { "$ref": "#/$defs/text" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "flowVisual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title", "caption", "evidenceIds", "steps"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "flow" },
+        "title": { "$ref": "#/$defs/text" },
+        "caption": { "$ref": "#/$defs/text" },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "steps": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "detail"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "label": { "$ref": "#/$defs/text" },
+              "detail": { "$ref": "#/$defs/text" }
+            }
+          }
+        }
+      }
+    },
+    "decisionTableVisual": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title", "caption", "evidenceIds", "columns", "rows"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "decision-table" },
+        "title": { "$ref": "#/$defs/text" },
+        "caption": { "$ref": "#/$defs/text" },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "columns": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/text" }
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "cells"],
+            "properties": {
+              "label": { "$ref": "#/$defs/text" },
+              "cells": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 8,
+                "items": { "$ref": "#/$defs/text" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "decision", "rationale", "tradeoff", "basis", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "decision": { "$ref": "#/$defs/text" },
+        "rationale": { "$ref": "#/$defs/text" },
+        "tradeoff": { "$ref": "#/$defs/text" },
+        "basis": { "enum": ["declared", "observed", "inferred", "unknown"] },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "command", "status", "result", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "command": { "$ref": "#/$defs/text" },
+        "status": { "enum": ["not-run", "unknown"] },
+        "result": { "$ref": "#/$defs/text" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "authorQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "question", "why", "unknownClaimIds", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "question": { "$ref": "#/$defs/text" },
+        "why": { "$ref": "#/$defs/text" },
+        "unknownClaimIds": { "$ref": "#/$defs/idList" },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "text": { "$ref": "#/$defs/text" }
+      }
+    },
+    "quiz": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passPercent", "questions"],
+      "properties": {
+        "passPercent": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "questions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "category", "type", "prompt", "options", "correctOptionIds", "explanation", "evidenceIds"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "category": { "enum": ["prediction", "flow", "invariant", "risk", "safe-change"] },
+              "type": { "enum": ["single", "multiple"] },
+              "prompt": { "$ref": "#/$defs/text" },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 6,
+                "items": { "$ref": "#/$defs/option" }
+              },
+              "correctOptionIds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 6,
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/id" }
+              },
+              "explanation": { "$ref": "#/$defs/text" },
+              "evidenceIds": { "$ref": "#/$defs/idList" }
+            }
+          }
+        }
+      }
+    },
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steps", "outcome"],
+      "properties": {
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["component", "behavior"],
+            "properties": {
+              "component": { "$ref": "#/$defs/text" },
+              "behavior": { "$ref": "#/$defs/text" }
+            }
+          }
+        },
+        "outcome": { "$ref": "#/$defs/text" }
+      }
+    },
+    "microworld": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "instructions", "evidenceIds", "controls", "scenarios"],
+      "properties": {
+        "title": { "$ref": "#/$defs/text" },
+        "instructions": { "$ref": "#/$defs/text" },
+        "evidenceIds": { "$ref": "#/$defs/idList" },
+        "controls": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "defaultOptionId", "options"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "label": { "$ref": "#/$defs/text" },
+              "defaultOptionId": { "$ref": "#/$defs/id" },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 4,
+                "items": { "$ref": "#/$defs/option" }
+              }
+            }
+          }
+        },
+        "scenarios": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title", "when", "before", "after", "lesson"],
+            "properties": {
+              "id": { "$ref": "#/$defs/id" },
+              "title": { "$ref": "#/$defs/text" },
+              "when": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["controlId", "optionId"],
+                  "properties": {
+                    "controlId": { "$ref": "#/$defs/id" },
+                    "optionId": { "$ref": "#/$defs/id" }
+                  }
+                }
+              },
+              "before": { "$ref": "#/$defs/trace" },
+              "after": { "$ref": "#/$defs/trace" },
+              "lesson": { "$ref": "#/$defs/text" }
+            }
+          }
+        }
+      }
+    },
+    "ssotCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "insight", "whyDurable", "target", "path", "evidenceIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "insight": { "$ref": "#/$defs/text" },
+        "whyDurable": { "$ref": "#/$defs/text" },
+        "target": { "enum": ["test", "code-comment", "architecture-doc", "api-doc", "runbook", "existing-project-ssot"] },
+        "path": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/relativePath" }] },
+        "evidenceIds": { "$ref": "#/$defs/idList" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "source", "label", "path", "side", "startLine", "endLine", "commitSha", "excerpt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "source": { "enum": ["pr-description", "commit", "code", "test"] },
+        "label": { "$ref": "#/$defs/text" },
+        "path": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/relativePath" }] },
+        "side": { "type": "null" },
+        "startLine": { "type": "null" },
+        "endLine": { "type": "null" },
+        "commitSha": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha" }] },
+        "excerpt": { "$ref": "#/$defs/text" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "source": { "enum": ["code", "test"] } } },
+          "then": { "properties": { "path": { "$ref": "#/$defs/relativePath" } } },
+          "else": { "properties": { "path": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "source": { "const": "commit" } } },
+          "then": { "properties": { "commitSha": { "$ref": "#/$defs/sha" } } },
+          "else": { "properties": { "commitSha": { "type": "null" } } }
+        }
+      ]
+    }
+  }
+}

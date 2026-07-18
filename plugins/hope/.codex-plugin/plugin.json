@@ -1,7 +1,7 @@
 {
   "name": "hope",
-  "version": "0.2.0-alpha",
-  "description": "Align intent before coding and understand the resulting change before merge.",
+  "version": "0.3.0-alpha",
+  "description": "Understand GitHub pull request changes before merge through explanation, a quiz, and an interactive review.",
   "author": {
     "name": "SeungIl",
     "url": "https://github.com/dkstm95"
@@ -9,17 +9,17 @@
   "homepage": "https://github.com/dkstm95/hope#readme",
   "repository": "https://github.com/dkstm95/hope",
   "license": "MIT",
-  "keywords": ["align", "intent", "diff", "code-review", "learning", "microworld"],
+  "keywords": ["diff", "pull-request", "change-request", "code-review", "code-understanding", "learning", "microworld"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Hope",
-    "shortDescription": "Align intent and understand changes",
-    "longDescription": "Align human and AI intent before coding, then compare it with the exact local change through evidence, a quiz, and a safe offline interactive microworld.",
+    "shortDescription": "Understand pull requests through active review",
+    "longDescription": "Turn an exact GitHub pull request snapshot into one safe offline review with visual explanation, a literate diff, an auto-scored quiz, and an optional interactive microworld.",
     "developerName": "SeungIl",
     "category": "Engineering",
     "capabilities": ["Read", "Write", "Interactive"],
     "defaultPrompt": [
-      "Align with me before coding, then help me understand the resulting change."
+      "Use $hope:diff with a GitHub pull request URL to create a visual, interactive change review."
     ],
     "brandColor": "#5B5BD6",
     "composerIcon": "./assets/telescope.svg",
