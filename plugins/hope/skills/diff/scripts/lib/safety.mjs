@@ -22,6 +22,19 @@ const SECRET_PATTERNS = [
 ];
 
 const SENSITIVE_KEY_PATTERN = /(?:^|[^a-z0-9])(?:api[_-]?key|secret(?:[_-]?(?:access|private|client))?[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|refresh[_-]?token|password|passwd|pwd|secret|token)(?:$|[^a-z0-9])/iu;
+const SENSITIVE_COMPACT_KEY_SUFFIX_PATTERN = /(?:apikey|secretaccesskey|secretkey|privatekey|clientsecret|accesstoken|authtoken|refreshtoken)$/iu;
+const DETECTOR_DEFINITION_SUFFIXES = new Set([
+  "pattern",
+  "patterns",
+  "regex",
+  "regexes",
+  "rule",
+  "rules",
+  "matcher",
+  "matchers",
+  "detector",
+  "detectors",
+]);
 const BARE_ASSIGNMENT_PATTERN = /(?:^|[\s,{;])([A-Za-z0-9_.:@/-]+)[ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|([^\r\n,;}]+))/gmu;
 const QUOTED_KEY_ASSIGNMENT_PATTERN = /(?:^|[\s,{;])(["'`])((?:\\.|(?!\1)[^\\\r\n])*)\1[ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|([^\r\n,;}]+))/gmu;
 const BRACKETED_ASSIGNMENT_PATTERN = /\[[ \t]*(["'`])((?:\\.|(?!\1)[^\\\r\n])*)\1[ \t]*\][ \t]*(?::|=(?!=|>))[ \t]*(?:"((?:\\.|[^"\\\r\n])*)"|'((?:\\.|[^'\\\r\n])*)'|`((?:\\.|[^`\\\r\n])*)`|([^\r\n,;}]+))/gmu;
@@ -68,12 +81,33 @@ function decodeStaticKey(value) {
   }
 }
 
-function isSensitiveKey(value) {
-  const normalized = value.replace(/([a-z0-9])([A-Z])/gu, "$1_$2");
-  return SENSITIVE_KEY_PATTERN.test(normalized);
+function keyTokens(value) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .filter(Boolean);
 }
 
-function assignmentIsUnsafe(value, quoted) {
+function isSensitiveKey(value) {
+  const normalized = value.replace(/([a-z0-9])([A-Z])/gu, "$1_$2");
+  return (
+    SENSITIVE_KEY_PATTERN.test(normalized) ||
+    SENSITIVE_COMPACT_KEY_SUFFIX_PATTERN.test(normalized.replace(/[^a-z0-9]+/giu, ""))
+  );
+}
+
+function isDetectorDefinitionOpener(key, value, quoted) {
+  const suffix = keyTokens(key).at(-1);
+  return (
+    !quoted &&
+    DETECTOR_DEFINITION_SUFFIXES.has(suffix) &&
+    /^(?:\[|\{)$/u.test(value.trim())
+  );
+}
+
+function assignmentIsUnsafe(key, value, quoted) {
+  if (isDetectorDefinitionOpener(key, value, quoted)) return false;
   return !isPlaceholder(value) && (quoted || !isSafeReference(value));
 }
 
@@ -84,7 +118,7 @@ function containsUnsafeAssignment(value) {
     if (isSensitiveKey(match[1])) {
       const quoted = match[2] !== undefined || match[3] !== undefined || match[4] !== undefined;
       const assigned = match[2] ?? match[3] ?? match[4] ?? match[5] ?? "";
-      if (assignmentIsUnsafe(assigned, quoted)) return true;
+      if (assignmentIsUnsafe(match[1], assigned, quoted)) return true;
     }
     match = BARE_ASSIGNMENT_PATTERN.exec(value);
   }
@@ -92,10 +126,11 @@ function containsUnsafeAssignment(value) {
     pattern.lastIndex = 0;
     match = pattern.exec(value);
     while (match !== null) {
-      if (isSensitiveKey(decodeStaticKey(match[2]))) {
+      const key = decodeStaticKey(match[2]);
+      if (isSensitiveKey(key)) {
         const quoted = match[3] !== undefined || match[4] !== undefined || match[5] !== undefined;
         const assigned = match[3] ?? match[4] ?? match[5] ?? match[6] ?? "";
-        if (assignmentIsUnsafe(assigned, quoted)) return true;
+        if (assignmentIsUnsafe(key, assigned, quoted)) return true;
       }
       match = pattern.exec(value);
     }

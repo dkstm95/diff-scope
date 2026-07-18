@@ -16,6 +16,7 @@ import {
   validateReviewAgainstChangeRequest,
   validateReviewModel,
 } from "../plugins/hope/skills/diff/scripts/lib/validate-review.mjs";
+import { collectSecretIssues } from "../plugins/hope/skills/diff/scripts/lib/safety.mjs";
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(testDirectory, "fixtures", "review-model-v1.json");
@@ -415,6 +416,27 @@ test("rejects high-confidence secrets anywhere in the ReviewModel", async (t) =>
         (error) => error instanceof ReviewValidationError && /suspected/.test(error.message),
       );
     });
+  }
+});
+
+test("distinguishes secret-detector declarations from credential assignments", () => {
+  assert.deepEqual(collectSecretIssues("const SECRET_PATTERNS = ["), []);
+  assert.deepEqual(collectSecretIssues("const passwordRules = {"), []);
+  assert.deepEqual(collectSecretIssues("const CLIENT_SECRET_REGEXES = ["), []);
+
+  for (const assignment of [
+    "const SECRET = [",
+    "const CLIENT_SECRET = {",
+    "AWS_SECRET_ACCESS_KEY = [",
+    "MY_API_KEY = {",
+    "MYAPIKEY = [",
+    "PASSWORD_HASH = [",
+    "TOKEN_VALUE = {",
+    "SECRET_VALUE = [",
+    "SECRET_CLIENT_KEY = {",
+    'SECRET_PATTERNS = ["literal-client-material"]',
+  ]) {
+    assert.match(collectSecretIssues(assignment).join("\n"), /secret assignment/u);
   }
 });
 
