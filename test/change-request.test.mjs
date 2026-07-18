@@ -511,8 +511,10 @@ test("writes private output and refuses existing or symlink paths", async (t) =>
   const directory = path.dirname(output);
   t.after(async () => await rm(directory, { recursive: true, force: true }));
   assert.equal(path.basename(output), "change-request.json");
-  assert.equal((await lstat(directory)).mode & 0o777, 0o700);
-  assert.equal((await lstat(output)).mode & 0o777, 0o600);
+  if (process.platform !== "win32") {
+    assert.equal((await lstat(directory)).mode & 0o777, 0o700);
+    assert.equal((await lstat(output)).mode & 0o777, 0o600);
+  }
   assert.deepEqual(JSON.parse(await readFile(output, "utf8")), context);
   await assert.rejects(writeChangeRequestFile(context, output), /overwrite/u);
   assert.deepEqual(JSON.parse(await readFile(output, "utf8")), context);

@@ -238,7 +238,9 @@ async function assertPrivateHopeDirectory(filePaths) {
   const directories = new Set(filePaths.map((filePath) => dirname(resolve(filePath))));
   for (const directory of directories) {
     const status = await lstat(directory);
-    if (!status.isDirectory() || status.isSymbolicLink() || (status.mode & 0o077) !== 0) {
+    const hasUnsafePosixPermissions =
+      process.platform !== "win32" && (status.mode & 0o077) !== 0;
+    if (!status.isDirectory() || status.isSymbolicLink() || hasUnsafePosixPermissions) {
       throw new Error("Hope cleanup requires a private, non-symlink temporary directory");
     }
   }

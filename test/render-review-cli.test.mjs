@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 import {
+  chmod,
   lstat,
   mkdtemp,
   readFile,
@@ -175,6 +176,27 @@ test("cleanup-only mode refuses a symlinked Hope directory", async (t) => {
     "keep-private-context",
   );
 });
+
+test(
+  "cleanup-only mode refuses a non-private Hope directory on POSIX",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), "hope-context-"));
+    t.after(async () => await rm(directory, { recursive: true, force: true }));
+    const input = join(directory, "review-model.json");
+    const context = join(directory, "change-request.json");
+    await writeFile(input, "keep-review");
+    await writeFile(context, "keep-context");
+    await chmod(directory, 0o755);
+
+    await assert.rejects(
+      main(["--context", context, "--cleanup"]),
+      /private, non-symlink temporary directory/u,
+    );
+    assert.equal(await readFile(input, "utf8"), "keep-review");
+    assert.equal(await readFile(context, "utf8"), "keep-context");
+  },
+);
 
 test("loads JSON through one bounded non-symlink file handle", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "review-input-test-"));
