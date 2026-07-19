@@ -100,7 +100,7 @@ with the whole-change summary:
 node <skill-dir>/scripts/inspect-change-request.mjs --context <change-request.json> --summary
 ```
 
-The inspector emits one compact JSON page of at most 8 KiB. If
+The inspector emits one compact JSON page of at most 16 KiB. If
 `page.hasNext` is `true`, inspect the next page with the receipt from the page
 you just received:
 
@@ -159,7 +159,9 @@ and clean the transient context instead of producing a partial synthesis.
 Read [review-model-v1.schema.json](references/review-model-v1.schema.json) and
 [review-contract.md](references/review-contract.md) completely. Inspect only the
 smallest additional pull request context needed to explain behavior. Do not use a
-local checkout as hidden evidence.
+local checkout as hidden evidence. Do not fetch PR discussion, review comments,
+or CI checks outside the bound Change Request; the alpha UI explicitly labels
+those sources as uncollected.
 
 Write one private `review-model.json` beside the collected
 `change-request.json` in the same `hope-context-*` temporary directory. It must
@@ -197,6 +199,10 @@ Apply these rules:
   literate-diff excerpts may use only files whose body state is `included`.
   Keep code excerpts small and connect each excerpt to the behavior it
   demonstrates.
+- Require each excerpt to support every material clause of the claim that cites
+  it. A changed hunk does not prove unchanged control flow, call-site meaning,
+  whole-file behavior, PR discussion state, or CI status. Mark such conclusions
+  `inferred` or `unknown` and ask a question when the missing context matters.
 - Explain observable before-to-after behavior and the causal path, not every
   changed line or commit.
 - Plan the human reading path before writing fields. Give each important idea
@@ -205,7 +211,8 @@ Apply these rules:
   microworld. Quiz repetition is allowed only for deliberate recall practice.
 - Give the reader a minimal causal model before asking for judgment: explain
   what changed and how the main behavior flows, then present author questions
-  and material risks before experiments, quizzes, or code details.
+  and material risks. Keep selected code and the central evidence index before
+  optional experiments and the quiz.
 - Prefer three to five observable changes. Keep each paragraph to one main idea
   and usually no more than two short sentences. For Korean, use one consistent
   polite `-합니다` style.
@@ -213,8 +220,10 @@ Apply these rules:
   near the top. Do not say Hope read the whole change, every file, or everything
   without immediately qualifying what was excluded.
 - Separate decisions, tradeoffs, invariants, risks, unknowns, and verification
-  limits. This alpha collects neither a checkout nor CI results, so verification
-  status must be `not-run` or `unknown`; never claim `passed` or `failed`.
+  limits. A risk is a plausible adverse outcome or failure, not merely a changed
+  scope. This alpha collects neither a checkout, PR discussion, review comments,
+  nor CI results, so verification status must be `not-run` or `unknown`; never
+  claim `passed` or `failed`.
 - Use typed declarative visualizations only when they make the change easier to
   understand. Prefer one visual and add a second only for a different
   comprehension job. A visual must clarify or replace prose rather than repeat
@@ -223,7 +232,8 @@ Apply these rules:
 - Write one global set of three to five quiz questions for the whole change, not
   one quiz per pass or workstream. Include at least one behavior prediction and
   one invariant or risk question. Bind every answer explanation to collected
-  evidence.
+  evidence. Use plausible distractors and prefer applying the behavior over
+  obvious recall of labels or paths.
 - Set the microworld to `null` unless adjustable scenarios materially improve
   understanding of the whole change. When useful, create at most one microworld
   and use only the bounded declarative controls and scenarios allowed by the
@@ -244,12 +254,15 @@ Apply these rules:
   content unless the term itself is essential to understanding the code. Prefer
   "PR version" to "snapshot", "changed code" to "patch", "reading group" to
   "analysis pass", and "current PR" to "live PR" in ordinary teaching text.
+  Explain the effect in plain language before introducing an exact code
+  identifier. When an identifier or metric name matters, quote its exact name
+  once rather than inventing a shortened pseudo-name.
 - Never add a cache, database, registry, `.hope/` archive, or project file.
 
 ## 5. Validate, correct, and render once
 
-First validate the transient Review Model against the exact context without
-deleting either private input:
+First validate the transient Review Model offline against the exact stored
+context without deleting either private input:
 
 ```bash
 node <skill-dir>/scripts/render-review.mjs --input <review-model.json> --context <change-request.json> --validate-only
@@ -272,6 +285,13 @@ The renderer validates exact Change Request binding and complete
 and requires the same canonical fingerprint; after writing, it rechecks the
 live base, head, and relevant metadata. A changed snapshot or context mismatch
 removes or prevents the newly created review.
+
+If the GitHub refresh or final revalidation fails transiently, the renderer
+removes any new HTML but keeps the private inputs. Retry the same render command
+once in the active workflow. If that retry also fails or the workflow stops,
+run cleanup-only mode so the preserved private inputs do not accumulate.
+Deterministic validation and stale-snapshot failures still clean inputs when
+`--cleanup` was requested.
 
 By default, the renderer creates one `hope-review.html` in a new private OS
 temporary directory. Stdout remains exactly one file-path line for compatibility;

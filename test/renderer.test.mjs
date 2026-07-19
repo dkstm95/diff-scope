@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { Script } from "node:vm";
 
 import {
   renderReviewHtml,
@@ -715,6 +716,23 @@ test("distinguishes secret-detector declarations from credential assignments", (
   assert.deepEqual(collectSecretIssues("const CLIENT_SECRET_REGEXES = ["), []);
   assert.deepEqual(collectSecretIssues('password = "" ;'), []);
   assert.deepEqual(collectSecretIssues('password = "example"; # fixture'), []);
+  assert.deepEqual(collectSecretIssues("token: CancellationToken"), []);
+  assert.deepEqual(
+    collectSecretIssues("token: CancellationToken = CancellationToken.None): Promise<void> {"),
+    [],
+  );
+  assert.match(
+    collectSecretIssues("token: ABCDEFGHIJKLMNOPQRSTUVWXYZ123456").join("\n"),
+    /secret assignment/u,
+  );
+  for (const assignment of [
+    "token: Abcdefghijklmnopqrstuvwxyz123456",
+    "password: CorrectHorseBatteryStaple",
+    "secret: TopSecretValue1234567890",
+    "api_key: MyRealCredentialMaterial12345",
+  ]) {
+    assert.match(collectSecretIssues(assignment).join("\n"), /secret assignment/u);
+  }
 
   for (const assignment of [
     "const SECRET = [",
@@ -778,9 +796,9 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
     'id="overview"',
     'id="workstreams"',
     'id="review-focus"',
+    'id="literate-diff"',
     'id="microworld-section"',
     'id="quiz"',
-    'id="literate-diff"',
     'id="details"',
   ].map((marker) => first.indexOf(marker));
   assert.ok(sectionOrder.every((position) => position >= 0));
@@ -814,11 +832,21 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /fieldset \{ min-inline-size: 0;/u);
   assert.match(first, /\.choice > span \{ min-width: 0; overflow-wrap: anywhere; \}/u);
   assert.match(first, /\.table-wrap \{ width: 100%; max-width: 100%; overflow-x: auto;/u);
-  assert.match(first, /@media \(max-width: 400px\)[\s\S]*\.meta \{ grid-template-columns: 1fr; \}[\s\S]*\.compact-meta \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/u);
+  assert.match(first, /@media \(max-width: 400px\)[\s\S]*\.meta \{ grid-template-columns: 1fr; \}[\s\S]*\.compact-meta \{ grid-template-columns: 1fr; \}/u);
+  assert.match(first, /document\.getElementById\("review-title"\)\.textContent = review\.title/u);
+  assert.match(first, /id="review-source" target="_blank" rel="noreferrer noopener"/u);
+  assert.match(first, /이 PR에서 바뀐 코드 부분만 확인했습니다/u);
+  assert.match(first, /"coverage":\{"complete":"모두 확인","partial":"일부 제외","blocked":"확인 불가"\}/u);
+  assert.doesNotMatch(first, /변경 코드 조각/u);
+  assert.match(first, /id="evidence-index"/u);
+  assert.match(first, /function renderEvidenceIndex\(\)/u);
+  assert.doesNotMatch(first, /item\.append\(element\("pre", entry\.excerpt/u);
   assert.match(first, /flow\.setAttribute\("role", "list"\)/u);
   assert.match(first, /element\("span", String\(index \+ 1\), "flow-number"\)/u);
   assert.doesNotMatch(first, /counter-reset: hope-step|\.visual-flow li::marker/u);
   assert.match(first, /element\("fieldset", undefined, "quiz-question"\)/u);
+  assert.match(first, /element\("h6", ui\.overview\.before\)/u);
+  assert.match(first, /element\("h6", ui\.overview\.after\)/u);
   assert.match(first, /"more":"배경과 변경 전후 자세히 보기","before":"변경 전","after":"변경 후"/u);
   assert.match(first, /"before":"선택한 조건","after":"예상 동작","outcome":"결과"/u);
   assert.doesNotMatch(first, /appendEvidence\(item, step\.evidenceIds\)/u);
@@ -837,6 +865,7 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   const data = first.match(/<script id="review-data" type="application\/json">([\s\S]*?)<\/script>/u)?.[1];
   const runtime = first.match(/<script>([\s\S]*?)<\/script>\s*<\/body>/u)?.[1];
   assert.ok(csp && style && data && runtime);
+  assert.doesNotThrow(() => new Script(runtime));
   for (const body of [style, data, runtime]) {
     const digest = createHash("sha256").update(body, "utf8").digest("base64");
     assert.ok(csp.includes(`'sha256-${digest}'`));
@@ -856,6 +885,9 @@ test("renders the fixed interface in the selected language", async () => {
   assert.match(html, /<h2 id="quiz-heading">Quiz<\/h2>/u);
   assert.match(html, /<h2 id="literate-heading">Check the code<\/h2>/u);
   assert.match(html, /<h2 id="details-heading">Analysis details<\/h2>/u);
+  assert.match(html, /Hope checked only the changed parts shown in this PR's diff/u);
+  assert.match(html, /Show evidence \(\{count\}\)/u);
+  assert.doesNotMatch(html, /question\(s\)|evidence link\(s\)/u);
 });
 
 test("keeps maximum-length review text inside shrinkable layout containers", async () => {

@@ -6,11 +6,11 @@ import { canonicalizeJson } from "./safety.mjs";
 const RECEIPT_DOMAIN = "hope:inspection-page:v1\0";
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/u;
 const PASS_ID_PATTERN = /^pass-[0-9]{3}$/u;
-const MAX_ENTRY_BYTES = 6 * 1024;
-const MAX_ENTRIES_BYTES = 7 * 1024;
+const MAX_ENTRY_BYTES = 12 * 1024;
+const MAX_ENTRIES_BYTES = 15 * 1024;
 
 export const INSPECTION_PROTOCOL_VERSION = 1;
-export const MAX_INSPECTION_OUTPUT_BYTES = 8 * 1024;
+export const MAX_INSPECTION_OUTPUT_BYTES = 16 * 1024;
 
 function bytes(value) {
   return Buffer.byteLength(JSON.stringify(value));

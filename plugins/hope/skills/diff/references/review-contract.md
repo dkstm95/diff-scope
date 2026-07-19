@@ -41,22 +41,22 @@ and page budgets; they are not permission to expand any collection limit.
 The HTML presents information in human-review order with progressive
 disclosure:
 
-1. the pull request title, a short explanation, four compact trust facts, and
-   any partial-coverage warning;
+1. a short localized review title, the linked original pull request title, a
+   short explanation, compact trust facts, and any partial-coverage warning;
 2. the few observable changes and one useful visual, with background and
    before/after detail collapsed;
 3. collapsed behavior flows and a collapsed cross-flow synthesis, so the
    reader has a minimal causal model of the change;
 4. unresolved questions and material risks, followed by collapsed invariants,
    decisions, and verification limits;
-5. an optional interactive model and a collapsed understanding check;
-6. a collapsed selective code walkthrough and optional project-knowledge
-   candidates; and
+5. a collapsed selective code walkthrough and one central evidence index;
+6. an optional collapsed interactive model, a collapsed understanding check,
+   and optional project-knowledge candidates; and
 7. collapsed analysis details containing exact object IDs, fingerprint,
    coverage dimensions, the complete file map, and processing metadata.
 
-Evidence remains available, but repeated references are deduplicated and shown
-once per section or meaningful card rather than after every sentence and step.
+Evidence remains available, but each excerpt is rendered once in the central
+index. Related sections and cards link to that entry instead of repeating the excerpt.
 Questions that require human judgment are not discarded to hit a display count;
 the renderer keeps each question collapsed until the reader chooses it.
 
@@ -91,6 +91,11 @@ justify exposing every internal note on the default page.
 - State partial coverage numerically and accurately. When any body is excluded,
   never claim that Hope read "all", "the whole change", or "every file" without
   immediately qualifying the statement.
+- Describe complete collection as all collected changed-code hunks, never as a
+  complete review of the whole file or pull request. This alpha does not collect
+  code outside the collected hunks, pull-request discussion, review comments,
+  or CI checks. The top states that boundary and separately notes that the PR
+  description and commit titles are collected context.
 - Show author questions and material risks immediately after the overview and
   behavior flows. The reader should first learn what changed and how it works,
   but should not have to cross experiments, quizzes, or code details before
@@ -134,7 +139,7 @@ One `ChangeRequestV1` represents the whole provider snapshot. It contains the
 complete provider-reported file map and one ordered, deterministic
 `analysisPlan`. The inspector first exposes a summary of that whole change and
 then exposes each safe patch pass by ID. Each invocation emits one compact JSON
-page of at most 8 KiB. A view's next page is available only with the preceding
+page of at most 16 KiB. A view's next page is available only with the preceding
 page receipt. The recorded page count and terminal receipt bind the active
 session's inspection attestation to that exact deterministic view, not its
 cognition. Supported descriptions, commit metadata, file maps, and 64 KiB
@@ -196,6 +201,12 @@ excerpt present in the collected, redacted description. Evidence in this alpha
 deliberately omits line coordinates because the collector does not bind hunk
 positions to source sides.
 
+An evidence excerpt must directly support every material clause of the claim
+that cites it. A changed hunk does not establish unchanged control flow,
+call-site meaning, whole-file behavior, or discussion state. When a claim needs
+that missing context, the generator marks it `inferred` or `unknown` and asks a
+question instead of promoting it to `observed`.
+
 ## Claims and uncertainty
 
 Every important claim declares one basis:
@@ -209,9 +220,11 @@ Hope never presents inferred intent as author-declared intent. Every evidence
 reference must resolve to one entry in the internal evidence registry. Evidence
 paths are safe relative POSIX paths.
 
-This alpha does not clone the repository or collect CI check results. Its
-verification entries may therefore be only `not-run` or `unknown`; a review
-cannot claim that a command passed or failed.
+This alpha does not clone the repository or collect pull-request discussion,
+review comments, or CI check results. Its verification entries may therefore
+be only `not-run` or `unknown`; a review cannot claim that a command passed or
+failed. An author question may already be answered outside the collected input,
+so the fixed UI says so.
 
 ## Semantic synthesis, literate diff, and visual model
 
@@ -253,7 +266,9 @@ The review then contains one global quiz with three to five evidence-backed
 questions for the whole change. It includes at least one prediction plus one
 invariant or risk question. Single-answer questions have exactly one answer;
 all references and option IDs are validated. Hope does not create one quiz per
-pass or workstream.
+pass or workstream. Distractors are plausible alternatives and questions should
+require applying the behavior, not merely recalling a path or rejecting an
+absurd option. Multiple-answer questions identify themselves in visible text.
 
 SSOT candidates are proposals only. They preserve only durable knowledge that
 is hard to recover from code and Git, target an existing project owner such as
@@ -283,10 +298,16 @@ mode is `0600`. An explicit output path must be a new `.html` file in an
 existing non-symlink directory. Publication uses an atomic hard link so a path
 created after the preflight check is never overwritten.
 
-Before rendering, `--validate-only` checks the private Review Model without
-deleting it or the bound Change Request. Correctable validation errors may be
-fixed and retried against those same inputs. After validation succeeds, the
-renderer writes once with `--cleanup`; abandonment uses the cleanup-only form.
+Before rendering, `--validate-only` checks the private Review Model against its
+stored, fingerprinted Change Request without a GitHub request and without
+deleting either input. Correctable validation errors may be fixed and retried
+against those same inputs. The actual render performs the full live recollection
+and final snapshot check. After validation succeeds, the renderer writes once
+with `--cleanup`; abandonment uses the cleanup-only form. A deterministic error
+cleans those inputs, while a transient GitHub refresh or final-revalidation
+failure removes any new HTML but preserves the private inputs for one-command
+retry. The active workflow retries once, then uses explicit abandonment cleanup
+if the retry fails so preserved inputs do not accumulate.
 
 ## Lifecycle
 

@@ -79,7 +79,7 @@ inspects every pass in order. Each pass contains at most 4,000 changed lines and
 64 KiB of safe patch text, so a large pull request uses several bounded passes
 instead of one oversized prompt or an arbitrary truncated prefix.
 
-Summary and pass views are delivered as compact pages of at most 8 KiB. Each
+Summary and pass views are delivered as compact pages of at most 16 KiB. Each
 next page requires the preceding snapshot-bound receipt, and the Review Model
 records the page count and terminal receipt as the active session's inspection
 attestation before rendering. The validator binds that attestation to the exact
@@ -111,18 +111,25 @@ hope-review.html
 
 Open it locally in a browser. It needs no network connection and contains:
 
-- the pull request title, a concise summary, and a compact analysis-scope notice;
+- a concise review title, a link to the original pull request, and an explicit
+  changed-code scope notice;
 - what changed, why it changed, and before/after behavior;
 - visual before/after panels, flows, or decision tables when they clarify the
   change;
 - behavior flows and how they affect each other;
 - risks, must-hold conditions, decisions, verification limits, and questions;
-- a focused walkthrough that connects key code evidence to the explanation;
+- a focused walkthrough plus one central evidence index, so excerpts are not
+  repeated throughout the page;
 - an interactive behavior model when exploration helps, followed by three to
   five auto-scored understanding questions;
 - optional candidates for durable project knowledge; and
 - collapsed technical details with the exact PR version, full file map, and
   analysis coverage.
+
+“Changed code: All checked” means Hope checked every changed part shown in the
+PR diff. Hope also uses the PR description and commit titles. It does not
+collect code outside those parts, pull-request discussion, review comments, or
+CI results in this alpha.
 
 The interactive model is intentionally optional. A change that is better
 explained by a diagram and questions does not receive a decorative simulator.
@@ -135,9 +142,12 @@ commands, and evidence excerpts stay in their original form.
 
 Hope uses one complete structured Change Request, bounded inspector passes, and
 a validated review model internally, but all of that state is transient. It
-validates the private Review Model without deleting it, corrects and retries any
-validation error, then removes private inputs after the final render or an
-explicit abandonment cleanup. It does not expose per-pass reports,
+validates the private Review Model offline without deleting it, corrects and
+retries any validation error, then removes private inputs after the final render
+or an explicit abandonment cleanup. A transient GitHub failure keeps those
+private inputs so the active Hope workflow can retry the same render once; a
+failed or abandoned retry uses cleanup so they do not accumulate. Hope does not
+expose per-pass reports,
 `intent.json`, `artifact.json`, or a separate Markdown explanation.
 
 By default, the HTML lives in a private OS temporary directory. Hope does not:
@@ -220,7 +230,7 @@ The current GitHub alpha accepts up to 250 commits and 200 changed files only
 when their normalized whole-change summary is at most 128 KiB. It accepts up to
 20,000 changed lines, 256 KiB of safe patch text for one file, and 768 KiB of
 safe patch text in total. Pull request descriptions are limited to 32 KiB, and
-each inspector page remains at most 8 KiB. These are explicit active-subscription,
+each inspector page remains at most 16 KiB. These are explicit active-subscription,
 model-visible safety ceilings, not pass boundaries. Hope checks them before
 paging; crossing one stops the review instead of producing an incomplete or
 operationally unusable explanation.
@@ -261,7 +271,7 @@ plugins/hope/                        distributable plugin
   .codex-plugin/plugin.json
   skills/diff/                       pull-request understanding workflow
     scripts/inspect-change-request.mjs bounded summary and pass inspector
-    scripts/lib/inspection-pages.mjs 8 KiB receipt-chain transport
+    scripts/lib/inspection-pages.mjs 16 KiB receipt-chain transport
 test/                                deterministic contract and runtime tests
 tools/check-release.mjs              release/package consistency checks
 ```

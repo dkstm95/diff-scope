@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Make the review scope explicit: Hope uses changed code hunks, the PR
+  description, and commit titles, but not code outside those hunks,
+  pull-request discussion, review comments, or CI.
+- Use the localized review title, link the original pull request, centralize
+  evidence excerpts, reduce small-review repetition, and improve narrow-screen
+  navigation, interactive-model disclosure, and quiz accessibility.
+- Avoid treating TypeScript `CancellationToken` annotations as credentials,
+  while retaining high-confidence secret detection and full-body exclusion.
+- Double bounded inspection pages to 16 KiB, make `--validate-only` offline,
+  and preserve private inputs only when a transient GitHub failure needs a
+  retry.
+- Stop invalidating a review solely because GitHub's volatile `updated_at`
+  value changed while all consumed pull-request fields stayed the same.
+
 ## 0.3.1-alpha - 2026-07-19
 
 - Give every default private Hope Review an immutable, strict ISO

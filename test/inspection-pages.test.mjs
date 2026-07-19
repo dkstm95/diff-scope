@@ -145,7 +145,7 @@ test("paginates large summary metadata deterministically within stdout bounds", 
   context.fingerprint = "a".repeat(64);
 
   const pages = buildInspectionPages(context, { kind: "summary" });
-  assert.ok(pages.length > 20);
+  assert.ok(pages.length > 10);
   assert.ok(pages.every((page) => outputBytes(page) <= MAX_INSPECTION_OUTPUT_BYTES));
   assert.ok(pages.flatMap((page) => page.entries).some((entry) => entry.pointer === "/files/199"));
   assert.ok(pages.flatMap((page) => page.entries).some((entry) => entry.pointer === "/commits/249"));
@@ -162,6 +162,7 @@ test("walks a 64 KiB pass through view-bound receipts without splitting Unicode"
   const context = makeContext({ patchText });
   const pages = buildInspectionPages(context, { kind: "pass", passId: "pass-001" });
   assert.ok(pages.length > 1);
+  assert.ok(pages.length <= 8);
   assert.ok(pages.every((page) => outputBytes(page) <= MAX_INSPECTION_OUTPUT_BYTES));
 
   const text = pages

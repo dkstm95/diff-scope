@@ -58,6 +58,7 @@ a { color: var(--accent); text-underline-offset: .18em; }
 .inline-links .label { color: var(--muted); font-weight: 750; }
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .lede { font-size: 1.12rem; }
+.review-source { margin: -4px 0 18px; color: var(--muted); font-size: .94rem; }
 .muted { color: var(--muted); }
 .notice { border-left: 4px solid var(--warning); border-radius: 8px; padding: 13px 15px; color: var(--warning); background: var(--warning-soft); }
 .grid { display: grid; gap: 16px; }
@@ -79,9 +80,12 @@ a { color: var(--accent); text-underline-offset: .18em; }
 .evidence { margin-top: 10px; color: var(--muted); }
 .evidence summary { min-height: 44px; padding-block: 8px; cursor: pointer; font-weight: 700; }
 .evidence ul { margin-bottom: 0; }
+.evidence-links { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.evidence-links .label { font-weight: 750; }
+.evidence-entry { scroll-margin-top: 76px; }
 .excerpt { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f2f1eb; }
 .before-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.before-after h5 { margin: 0 0 8px; }
+.before-after h5, .before-after h6 { margin: 0 0 8px; }
 .visual-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 0; list-style: none; }
 .visual-flow li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; }
 .flow-number { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); font-size: .82rem; font-weight: 800; }
@@ -94,7 +98,7 @@ th { background: #f0efe8; }
 .decision-table { min-width: 36rem; }
 .flow { padding-left: 1.4rem; }
 .flow li { margin-block: 10px; }
-.file-map { min-width: 64rem; font-size: .92rem; }
+.file-map { min-width: 56rem; font-size: .92rem; }
 .file-map code { word-break: normal; overflow-wrap: anywhere; }
 .path-list { columns: 2 280px; }
 .path-list li { break-inside: avoid; margin-block: 5px; }
@@ -140,7 +144,7 @@ footer { padding: 0 0 40px; color: var(--muted); font-size: .9rem; }
   .section-nav { position: sticky; top: 0; z-index: 5; padding-block: 8px; background: var(--paper); }
 }
 @media (max-width: 900px) {
-  .grid.two { grid-template-columns: 1fr; }
+  section, .evidence-entry { scroll-margin-top: 18px; }
   .workstream-card { scroll-margin-top: 18px; }
 }
 @media (max-width: 640px) {
@@ -151,15 +155,19 @@ footer { padding: 0 0 40px; color: var(--muted); font-size: .9rem; }
   h3 { margin-top: 22px; }
   section { border-radius: 12px; padding: 16px; scroll-margin-top: 18px; }
   .card { padding: 14px; }
-  .section-nav { width: calc(100% - 20px); margin-bottom: 12px; }
+  .section-nav { width: calc(100% - 20px); flex-wrap: wrap; overflow-x: visible; margin-bottom: 12px; }
+  .section-nav a { flex: 1 1 auto; justify-content: center; }
   .before-after { grid-template-columns: 1fr; }
   .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .compact-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   th, td { padding: 8px; }
 }
+@media (max-width: 580px) {
+  .grid.two { grid-template-columns: 1fr; }
+}
 @media (max-width: 400px) {
   .meta { grid-template-columns: 1fr; }
-  .compact-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .compact-meta { grid-template-columns: 1fr; }
   .visual-flow { grid-template-columns: 1fr; }
 }`;
 
@@ -171,6 +179,8 @@ const REVIEW_UI = {
       summary: "Summary",
       behavior: "Flow",
       focus: "Checks",
+      focusCount: "Checks ({count})",
+      focusDetails: "Checks: questions {questions}, risks {risks}",
       code: "Code & evidence",
       try: "Explore",
       quiz: "Quiz",
@@ -178,6 +188,7 @@ const REVIEW_UI = {
     },
     context: {
       pr: "PR",
+      source: "Original PR",
       author: "Author",
       stage: "Status",
       commits: "Commits",
@@ -185,18 +196,22 @@ const REVIEW_UI = {
       changedLines: "Changed lines",
       size: "Size",
       sizeValue: "{files} files · {lines} lines",
-      coverage: "Analysis scope",
-      partialNotice: "{excluded} of {total} file(s) could not be inspected. This review uses the {included} inspected file(s) only.",
+      coverage: "Changed code",
+      verification: "Execution checks",
+      verificationValue: "Tests and CI not checked",
+      scopeBoundary: "Hope checked only the changed parts shown in this PR's diff. It also used the PR description and commit titles. Code outside those parts, PR discussion, review comments, and CI results were not included.",
+      discussionCaution: "A question shown here may already have an answer in the PR discussion, which Hope did not collect.",
+      partialNotice: "Changed code could not be inspected in {excluded} of {total} file(s). This review uses the {included} inspected file(s) only.",
       attentionNotice: "Some review inputs need attention. See analysis details before relying on the explanation.",
     },
-    coverage: { complete: "Complete", partial: "Some content excluded", blocked: "Unable to analyze" },
+    coverage: { complete: "All checked", partial: "Some excluded", blocked: "Unable to check" },
     stage: { draft: "Draft", ready: "Ready for review", historical: "Merged or closed", abandoned: "Closed" },
     state: { open: "Open", closed: "Closed", merged: "Merged" },
     basis: { declared: "Author context", observed: "Confirmed in the change", inferred: "Inferred from evidence", unknown: "Needs confirmation" },
     evidenceSource: { "pr-description": "PR description", commit: "Commit", code: "Code", test: "Test" },
     fileStatus: { added: "Added", modified: "Modified", deleted: "Deleted", renamed: "Renamed", copied: "Copied", "type-changed": "Type changed" },
     bodyState: {
-      included: "Content inspected",
+      included: "Changed hunks inspected",
       redacted: "Excluded for security",
       binary: "Binary file",
       "generated-or-lockfile": "Generated or lock file",
@@ -292,6 +307,7 @@ const REVIEW_UI = {
       heading: "Quiz",
       help: "Use these questions to find gaps in your understanding. The score is not merge approval.",
       open: "Answer {count} questions",
+      multiple: "Select all that apply",
       submit: "Check answers and show explanations",
       correct: "Correct.",
       review: "Review this answer.",
@@ -319,7 +335,7 @@ const REVIEW_UI = {
       comparison: "Comparison",
       fileMap: "File map",
       representedFiles: "Files represented",
-      inspectedBodies: "File contents inspected",
+      inspectedBodies: "Files with changed hunks inspected",
       explainableLines: "Changed lines inspected",
       processingUnits: "Processing units",
       inspectionPages: "Inspection pages",
@@ -344,6 +360,8 @@ const REVIEW_UI = {
       warningSummary: "{count} item(s): {reason}",
     },
     evidence: "Evidence",
+    evidenceLinks: "Show evidence ({count})",
+    evidenceIndex: "Evidence excerpts ({count})",
     footer: "Generated by Hope for this exact PR version. This offline file makes no network requests.",
     noscript: "JavaScript is required to display the review, understanding check, and optional interactive model.",
   },
@@ -354,6 +372,8 @@ const REVIEW_UI = {
       summary: "요약",
       behavior: "동작",
       focus: "확인",
+      focusCount: "확인 ({count})",
+      focusDetails: "확인할 내용: 질문 {questions}개, 위험 {risks}개",
       code: "코드·근거",
       try: "실험",
       quiz: "퀴즈",
@@ -361,6 +381,7 @@ const REVIEW_UI = {
     },
     context: {
       pr: "PR",
+      source: "원본 PR",
       author: "작성자",
       stage: "상태",
       commits: "커밋",
@@ -368,18 +389,22 @@ const REVIEW_UI = {
       changedLines: "변경 줄",
       size: "규모",
       sizeValue: "파일 {files}개 · {lines}줄",
-      coverage: "분석 범위",
-      partialNotice: "전체 {total}개 중 {excluded}개 파일은 코드 내용을 확인하지 못했습니다. 이 리뷰는 확인한 {included}개 파일만 근거로 작성했습니다.",
+      coverage: "변경 코드",
+      verification: "실행 검증",
+      verificationValue: "테스트·CI 미확인",
+      scopeBoundary: "이 PR에서 바뀐 코드 부분만 확인했습니다. PR 설명과 커밋 제목도 근거로 사용했습니다. 바뀐 부분 밖의 코드, PR 토론·리뷰 댓글·CI 결과는 포함하지 않았습니다.",
+      discussionCaution: "여기에 나온 질문은 Hope가 수집하지 않은 PR 토론에서 이미 답변됐을 수 있습니다.",
+      partialNotice: "전체 {total}개 중 {excluded}개 파일은 변경 코드를 확인하지 못했습니다. 이 리뷰는 확인한 {included}개 파일만 근거로 작성했습니다.",
       attentionNotice: "일부 리뷰 입력을 확인해야 합니다. 설명을 신뢰하기 전에 분석 세부 정보를 살펴보세요.",
     },
-    coverage: { complete: "전체 분석", partial: "일부 제외", blocked: "분석 불가" },
+    coverage: { complete: "모두 확인", partial: "일부 제외", blocked: "확인 불가" },
     stage: { draft: "초안", ready: "리뷰 준비됨", historical: "머지 또는 종료됨", abandoned: "종료됨" },
     state: { open: "열림", closed: "닫힘", merged: "머지됨" },
     basis: { declared: "작성자 설명", observed: "변경 내용에서 확인", inferred: "근거로 추정", unknown: "확인 필요" },
     evidenceSource: { "pr-description": "PR 설명", commit: "커밋", code: "코드", test: "테스트" },
     fileStatus: { added: "추가", modified: "수정", deleted: "삭제", renamed: "이름 변경", copied: "복사", "type-changed": "형식 변경" },
     bodyState: {
-      included: "내용 확인",
+      included: "변경 코드 확인",
       redacted: "보안상 제외",
       binary: "바이너리 파일",
       "generated-or-lockfile": "생성/잠금 파일",
@@ -475,6 +500,7 @@ const REVIEW_UI = {
       heading: "이해 확인",
       help: "질문을 통해 이해가 부족한 부분을 찾습니다. 점수는 머지 승인을 의미하지 않습니다.",
       open: "{count}개 질문 풀기",
+      multiple: "해당 항목을 모두 고르세요",
       submit: "정답과 설명 확인",
       correct: "맞았습니다.",
       review: "이 답을 다시 살펴보세요.",
@@ -502,7 +528,7 @@ const REVIEW_UI = {
       comparison: "비교 범위",
       fileMap: "파일 맵",
       representedFiles: "확인된 파일",
-      inspectedBodies: "내용을 확인한 파일",
+      inspectedBodies: "변경 코드를 확인한 파일",
       explainableLines: "내용을 확인한 변경 줄",
       processingUnits: "분석 처리 단위",
       inspectionPages: "읽은 페이지",
@@ -527,6 +553,8 @@ const REVIEW_UI = {
       warningSummary: "{count}개 항목: {reason}",
     },
     evidence: "근거",
+    evidenceLinks: "근거 {count}개 보기",
+    evidenceIndex: "근거 원문 ({count}개)",
     footer: "Hope가 이 PR 버전을 기준으로 생성했습니다. 이 오프라인 파일은 네트워크를 사용하지 않습니다.",
     noscript: "리뷰, 이해도 확인, 선택적 동작 실험을 표시하려면 JavaScript가 필요합니다.",
   },
@@ -629,21 +657,48 @@ function evidenceLabel(entry) {
   return label;
 }
 
+function evidenceTarget(evidenceId) { return "evidence-entry-" + evidenceId; }
+
 function appendEvidence(parent, evidenceIds) {
   const uniqueIds = Array.from(new Set(evidenceIds));
   if (uniqueIds.length === 0) return;
   const details = element("details", undefined, "evidence");
-  details.append(element("summary", ui.evidence + " (" + String(uniqueIds.length) + ")"));
-  const list = element("ul");
-  uniqueIds.forEach(function (evidenceId) {
+  details.append(element("summary", format(ui.evidenceLinks, { count: uniqueIds.length })));
+  const group = element("p", undefined, "evidence-links");
+  uniqueIds.forEach(function (evidenceId, index) {
     const entry = evidenceById.get(evidenceId);
-    const item = element("li");
-    item.append(element("span", evidenceLabel(entry)));
-    if (entry.excerpt !== null) item.append(element("pre", entry.excerpt, "excerpt"));
-    list.append(item);
+    if (index > 0) group.append(document.createTextNode(" · "));
+    const link = internalLink(entry.label, evidenceTarget(evidenceId));
+    link.addEventListener("click", function () {
+      document.getElementById("evidence-index").open = true;
+      document.getElementById(evidenceTarget(evidenceId)).open = true;
+    });
+    group.append(link);
   });
-  details.append(list);
+  details.append(group);
   parent.append(details);
+}
+
+function renderEvidenceIndex() {
+  const index = document.getElementById("evidence-index");
+  document.getElementById("evidence-index-title").textContent = format(ui.evidenceIndex, { count: review.evidence.length });
+  const content = document.getElementById("evidence-index-content");
+  review.evidence.forEach(function (entry) {
+    const details = element("details", undefined, "card evidence-entry");
+    details.id = evidenceTarget(entry.id);
+    details.append(element("summary", evidenceLabel(entry)));
+    if (entry.excerpt !== null) details.append(element("pre", entry.excerpt, "excerpt"));
+    content.append(details);
+  });
+  index.hidden = false;
+}
+
+function openEvidenceFromHash() {
+  if (!window.location.hash.startsWith("#evidence-entry-")) return;
+  const target = document.getElementById(window.location.hash.slice(1));
+  if (target === null || !target.classList.contains("evidence-entry")) return;
+  document.getElementById("evidence-index").open = true;
+  target.open = true;
 }
 
 function renderClaim(value) {
@@ -655,15 +710,27 @@ function renderClaim(value) {
 
 function renderReviewContext() {
   const change = review.changeRequest;
-  document.getElementById("review-title").textContent = change.title;
+  document.getElementById("review-title").textContent = review.title;
   document.getElementById("review-lede").textContent = review.overview.summary.text;
-  document.title = change.title + " · Hope";
+  document.title = review.title + " · Hope";
+  const source = document.getElementById("review-source");
+  source.textContent = ui.context.source + ": " + change.repository + " #" + change.id + " · " + change.title;
+  source.href = change.url;
+  document.getElementById("scope-boundary").textContent = ui.context.scopeBoundary;
+  const focusLink = document.getElementById("focus-nav-link");
+  focusLink.textContent = format(ui.nav.focusCount, {
+    count: review.authorQuestions.length + review.risks.length,
+  });
+  focusLink.setAttribute("aria-label", format(ui.nav.focusDetails, {
+    questions: review.authorQuestions.length,
+    risks: review.risks.length,
+  }));
 
   const compactValues = [
-    [ui.context.pr, change.repository + " #" + change.id],
     [ui.context.stage, mapped("stage", change.reviewStage)],
     [ui.context.size, format(ui.context.sizeValue, { files: change.coverage.representedFiles, lines: change.coverage.changedLines })],
     [ui.context.coverage, mapped("coverage", change.coverage.status)],
+    [ui.context.verification, ui.context.verificationValue],
   ];
   appendMetadata(document.getElementById("review-context"), compactValues);
 
@@ -788,14 +855,14 @@ function renderVisuals() {
   }
   review.visuals.forEach(function (visual) {
     const article = element("article", undefined, "card");
-    heading(article, 3, visual.title);
+    heading(article, 4, visual.title);
     article.append(element("p", visual.caption, "muted"));
     if (visual.kind === "before-after") {
       visual.items.forEach(function (item) {
-        heading(article, 4, item.label);
+        heading(article, 5, item.label);
         const panels = element("div", undefined, "before-after");
-        const before = element("div", undefined, "card"); before.append(element("h5", ui.overview.before), element("p", item.before));
-        const after = element("div", undefined, "card"); after.append(element("h5", ui.overview.after), element("p", item.after));
+        const before = element("div", undefined, "card"); before.append(element("h6", ui.overview.before), element("p", item.before));
+        const after = element("div", undefined, "card"); after.append(element("h6", ui.overview.after), element("p", item.after));
         panels.append(before, after); article.append(panels);
       });
     } else if (visual.kind === "flow") {
@@ -851,6 +918,11 @@ function renderWorkstreams() {
 }
 
 function renderSynthesis() {
+  const container = document.getElementById("synthesis");
+  if (review.synthesis.interactions.length === 0) {
+    container.hidden = true;
+    return;
+  }
   const summary = document.getElementById("synthesis-summary");
   summary.append(renderClaim(review.synthesis.summary));
   const interactions = document.getElementById("synthesis-interactions");
@@ -858,11 +930,6 @@ function renderSynthesis() {
     ...review.synthesis.summary.evidenceIds,
     ...review.synthesis.interactions.flatMap(function (interaction) { return interaction.evidenceIds; }),
   ];
-  if (review.synthesis.interactions.length === 0) {
-    interactions.append(element("p", ui.behavior.noConnections, "muted"));
-    appendEvidence(document.getElementById("synthesis-evidence"), evidenceIds);
-    return;
-  }
   review.synthesis.interactions.forEach(function (interaction) {
     const card = element("article", undefined, "card");
     card.append(element("span", mapped("basis", interaction.basis), "tag " + interaction.basis));
@@ -886,7 +953,7 @@ function renderLiterateDiff() {
     const title = element("span", undefined, "summary-title"); title.append(element("code", entry.path));
     summary.append(title, element("span", entry.role, "summary-copy")); article.append(summary);
     entry.changes.forEach(function (change) {
-      const block = element("div", undefined, "literate-change"); heading(block, 4, change.headline); block.append(element("p", change.explanation)); article.append(block);
+      const block = element("div", undefined, "literate-change"); heading(block, 3, change.headline); block.append(element("p", change.explanation)); article.append(block);
     });
     appendEvidence(article, entry.changes.flatMap(function (change) { return change.evidenceIds; }));
     content.append(article);
@@ -909,6 +976,7 @@ function renderSafety() {
 function renderAuthorQuestions() {
   const content = document.getElementById("question-content");
   if (review.authorQuestions.length === 0) content.append(element("p", ui.focus.noQuestions, "muted"));
+  else content.append(element("p", ui.context.discussionCaution, "muted"));
   review.authorQuestions.forEach(function (entry) {
     const card = element("details", undefined, "card disclosure-card");
     card.append(element("summary", entry.question), element("p", entry.why));
@@ -930,7 +998,9 @@ function renderQuiz() {
   review.quiz.questions.forEach(function (question, index) {
     const fieldset = element("fieldset", undefined, "quiz-question");
     fieldset.tabIndex = -1;
-    fieldset.append(element("legend", String(index + 1) + ". " + question.prompt), element("span", mapped("quizCategory", question.category), "tag"));
+    const legend = element("legend", String(index + 1) + ". " + question.prompt);
+    if (question.type === "multiple") legend.append(document.createTextNode(" "), element("span", ui.quiz.multiple, "tag"));
+    fieldset.append(legend, element("span", mapped("quizCategory", question.category), "tag"));
     const inputs = [];
     question.options.forEach(function (option) {
       const label = element("label", undefined, "choice"); const input = element("input"); input.type = question.type === "single" ? "radio" : "checkbox"; input.name = "question-" + question.id; input.value = option.id; input.id = "question-" + question.id + "-" + option.id; label.setAttribute("for", input.id); label.append(input, element("span", option.text)); fieldset.append(label); inputs.push(input);
@@ -974,9 +1044,9 @@ function renderMicroworld() {
   const controls = document.getElementById("microworld-controls"); const selections = new Map();
   function update() {
     const scenario = world.scenarios.find(function (candidate) { return world.controls.every(function (control) { const binding = candidate.when.find(function (entry) { return entry.controlId === control.id; }); return binding && binding.optionId === selections.get(control.id); }); });
-    const view = document.getElementById("scenario-view"); const status = document.getElementById("scenario-status"); view.textContent = ""; if (!scenario) { view.append(element("p", ui.microworld.noScenario, "notice")); status.textContent = ui.microworld.noScenario; return; } heading(view, 3, scenario.title); const comparison = element("div", undefined, "grid two"); renderTrace(comparison, ui.microworld.before, scenario.before); renderTrace(comparison, ui.microworld.after, scenario.after); view.append(comparison, element("p", scenario.lesson, "lesson")); status.textContent = scenario.title + ". " + scenario.after.outcome;
+    const view = document.getElementById("scenario-view"); const status = document.getElementById("scenario-status"); view.textContent = ""; if (!scenario) { view.append(element("p", ui.microworld.noScenario, "notice")); status.textContent = ui.microworld.noScenario; return; } heading(view, 3, scenario.title); const comparison = element("div", undefined, "grid two"); renderTrace(comparison, ui.microworld.before, scenario.before); renderTrace(comparison, ui.microworld.after, scenario.after); view.append(comparison, element("p", scenario.lesson, "lesson")); const conditions = world.controls.map(function (control) { const option = control.options.find(function (candidate) { return candidate.id === selections.get(control.id); }); return control.label + ": " + option.text; }).join("; "); status.textContent = conditions + ". " + ui.microworld.before + ": " + scenario.before.outcome + ". " + ui.microworld.after + ": " + scenario.after.outcome + ". " + scenario.lesson;
   }
-  world.controls.forEach(function (control) { const wrapper = element("div", undefined, "control"); const label = element("label", control.label); const select = element("select"); select.id = "control-" + control.id; label.setAttribute("for", select.id); control.options.forEach(function (option) { const node = element("option", option.text); node.value = option.id; if (option.id === control.defaultOptionId) node.selected = true; select.append(node); }); selections.set(control.id, control.defaultOptionId); select.addEventListener("change", function () { selections.set(control.id, select.value); update(); }); wrapper.append(label, select); controls.append(wrapper); });
+  world.controls.forEach(function (control) { const wrapper = element("div", undefined, "control"); const label = element("label", control.label); const select = element("select"); select.id = "control-" + control.id; select.setAttribute("aria-controls", "scenario-view"); label.setAttribute("for", select.id); control.options.forEach(function (option) { const node = element("option", option.text); node.value = option.id; if (option.id === control.defaultOptionId) node.selected = true; select.append(node); }); selections.set(control.id, control.defaultOptionId); select.addEventListener("change", function () { selections.set(control.id, select.value); update(); }); wrapper.append(label, select); controls.append(wrapper); });
   update();
 }
 
@@ -997,7 +1067,10 @@ renderAuthorQuestions();
 renderMicroworld();
 renderQuiz();
 renderSsotCandidates();
-renderTechnicalDetails();`;
+renderEvidenceIndex();
+renderTechnicalDetails();
+openEvidenceFromHash();
+window.addEventListener("hashchange", openEvidenceFromHash);`;
 
 export function serializeReviewForHtml(review) {
   return JSON.stringify(review)
@@ -1048,24 +1121,27 @@ export function renderReviewHtml(review) {
     <p class="eyebrow">Hope · diff</p>
     <h1 id="review-title">${ui.documentTitle}</h1>
     <p id="review-lede" class="lede"></p>
+    <p class="review-source"><a id="review-source" target="_blank" rel="noreferrer noopener"></a></p>
     <dl id="review-context" class="meta compact-meta"></dl>
+    <p id="scope-boundary" class="muted" role="note"></p>
     <p id="scope-summary-warning" class="notice" role="note" hidden></p>
   </header>
   <nav class="section-nav" aria-label="${ui.reviewSections}">
     <a href="#overview">${ui.nav.summary}</a>
     <a href="#workstreams">${ui.nav.behavior}</a>
-    <a href="#review-focus">${ui.nav.focus}</a>
+    <a id="focus-nav-link" href="#review-focus">${ui.nav.focus}</a>
+    <a href="#literate-diff">${ui.nav.code}</a>
     <a id="microworld-nav-link" href="#microworld-section">${ui.nav.try}</a>
     <a href="#quiz">${ui.nav.quiz}</a>
-    <a href="#literate-diff">${ui.nav.code}</a>
+    <a href="#details">${ui.nav.details}</a>
   </nav>
   <main>
     <section id="overview" aria-labelledby="overview-heading"><h2 id="overview-heading">${ui.overview.heading}</h2><h3>${ui.overview.observableHeading}</h3><div id="observable-changes"></div><div id="visual-section" aria-labelledby="visual-heading"><h3 id="visual-heading">${ui.visual.heading}</h3><div id="visual-content" class="grid"></div></div><details class="secondary-details"><summary>${ui.overview.more}</summary><h3>${ui.overview.whyHeading}</h3><div id="background-content"></div><h3>${ui.overview.beforeAfterHeading}</h3><div id="overview-before-after" class="grid"></div></details><div id="overview-evidence"></div></section>
     <section id="workstreams" aria-labelledby="workstream-heading"><h2 id="workstream-heading">${ui.behavior.heading}</h2><p class="muted">${ui.behavior.help}</p><div id="workstream-content" class="grid"></div><details id="synthesis" class="secondary-details"><summary>${ui.behavior.connectionsSummary}</summary><div id="synthesis-summary"></div><div id="synthesis-interactions" class="grid"></div><div id="synthesis-evidence"></div></details></section>
     <section id="review-focus" aria-labelledby="review-focus-heading"><h2 id="review-focus-heading">${ui.focus.heading}</h2><h3>${ui.focus.questions}</h3><div id="question-content" class="grid"></div><h3>${ui.focus.risks}</h3><div id="risk-content"></div><details class="secondary-details"><summary>${ui.focus.more}</summary><h3>${ui.focus.invariants}</h3><div id="invariant-content"></div><h3>${ui.focus.decisions}</h3><div id="decision-content" class="grid"></div><h3>${ui.focus.verification}</h3><ul id="verification-content"></ul></details><div id="focus-evidence"></div></section>
-    <section id="microworld-section" aria-labelledby="microworld-heading" hidden><h2 id="microworld-heading">${ui.microworld.heading}</h2><p class="notice">${ui.microworld.notice}</p><h3 id="microworld-title"></h3><p id="microworld-instructions"></p><div id="microworld-evidence"></div><div id="microworld-controls" class="controls"></div><p id="scenario-status" class="sr-only" role="status" aria-live="polite"></p><div id="scenario-view" role="region" aria-label="${ui.microworld.regionLabel}"></div></section>
+    <section id="literate-diff" aria-labelledby="literate-heading"><h2 id="literate-heading">${ui.code.heading}</h2><p class="muted">${ui.code.help}</p><div id="literate-content" class="grid"></div><details id="evidence-index" class="secondary-details" hidden><summary id="evidence-index-title"></summary><div id="evidence-index-content" class="grid"></div></details></section>
+    <section id="microworld-section" aria-labelledby="microworld-heading" hidden><h2 id="microworld-heading">${ui.microworld.heading}</h2><details class="section-disclosure"><summary id="microworld-title"></summary><p class="notice">${ui.microworld.notice}</p><p id="microworld-instructions"></p><div id="microworld-evidence"></div><div id="microworld-controls" class="controls"></div><p id="scenario-status" class="sr-only" role="status" aria-live="polite"></p><div id="scenario-view" role="region" aria-label="${ui.microworld.regionLabel}"></div></details></section>
     <section id="quiz" aria-labelledby="quiz-heading"><h2 id="quiz-heading">${ui.quiz.heading}</h2><details id="quiz-disclosure" class="section-disclosure"><summary id="quiz-open"></summary><p class="muted">${ui.quiz.help}</p><form id="quiz-form"></form><div id="quiz-evidence"></div><p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1"></p></details></section>
-    <section id="literate-diff" aria-labelledby="literate-heading"><h2 id="literate-heading">${ui.code.heading}</h2><p class="muted">${ui.code.help}</p><div id="literate-content" class="grid"></div></section>
     <section id="ssot-section" aria-labelledby="ssot-heading" hidden><h2 id="ssot-heading">${ui.projectKnowledge.heading}</h2><p class="muted">${ui.projectKnowledge.help}</p><div id="ssot-content" class="grid"></div></section>
     <section id="details" aria-labelledby="details-heading"><h2 id="details-heading">${ui.details.heading}</h2><details class="technical-details"><summary>${ui.details.summary}</summary><p class="muted details-intro">${ui.details.help}</p><dl id="details-meta" class="meta"></dl><p class="muted">${ui.details.fingerprint}: <code id="details-fingerprint"></code></p><div id="scope-details-warning" class="notice" role="note" hidden></div><details><summary>${ui.details.changedFileMap}</summary><div class="table-wrap" tabindex="0" role="region" aria-label="${ui.details.changedFileMap}"><table class="file-map"><thead><tr><th scope="col">${ui.details.path}</th><th scope="col">${ui.details.previousPath}</th><th scope="col">${ui.details.status}</th><th scope="col">${ui.details.lines}</th><th scope="col">${ui.details.body}</th><th scope="col">${ui.details.processingUnit}</th><th scope="col">${ui.details.relatedFlows}</th></tr></thead><tbody id="file-map-body"></tbody></table></div></details><h3>${ui.details.processedUnits}</h3><p class="muted">${ui.details.processingHelp}</p><div id="analysis-pass-content" class="grid"></div></details></section>
   </main>

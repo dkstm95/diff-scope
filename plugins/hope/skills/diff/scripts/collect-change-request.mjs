@@ -313,7 +313,9 @@ function redactSensitiveText(value) {
     const replacements = [
       [
         /((?:api[_-]?key|secret(?:[_-]?access)?[_-]?key|private[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|refresh[_-]?token|password|passwd|pwd|secret|token)["'`\]]*\s*(?::|=(?!=|>))\s*)(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|[^\s,;}]+)/giu,
-        "$1[REDACTED]",
+        (match, prefix) => collectSecretIssues(match).length > 0
+          ? `${prefix}[REDACTED]`
+          : match,
       ],
       [/\bBearer\s+[A-Za-z0-9._~+/=-]+/giu, "Bearer [REDACTED]"],
       [
@@ -639,7 +641,6 @@ function normalizeMetadata(locator, pull) {
   };
   const safeFingerprintSnapshot = {
     ...snapshot,
-    metadataUpdatedAt: pull.updated_at,
     title: redactSensitiveMetadata(snapshot.title).text,
     description: redactSensitiveMetadata(
       truncateUtf8(snapshot.description, DEFAULT_LIMITS.descriptionBytes).text,

@@ -9,6 +9,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
+  GhApiError,
   SnapshotChangedError,
   assertSameSnapshot,
   collectChangeRequest,
@@ -47,8 +48,9 @@ Options:
              Exported files are never removed by Hope retention cleanup.
   --validate-only
              Validate and rebind the review without rendering or removing inputs.
-  --cleanup  Remove Hope-owned transient JSON after success, failure, or an
-             interrupted model-generation step when --input is omitted.
+  --cleanup  Remove Hope-owned transient JSON after success or a deterministic
+             failure. Transient GitHub failures keep inputs for one-command retry.
+             With no --input, remove an interrupted model-generation context.
   --help     Show this help message.
 `;
 }
@@ -206,6 +208,13 @@ export function assertLiveChangeRequestMatches(stored, live) {
   return live;
 }
 
+function isRetryableGitHubError(error) {
+  return (
+    error instanceof GhApiError &&
+    ["transport", "spawn", "timeout", "gh-api"].includes(error.code)
+  );
+}
+
 export function assertHopeOwnedCleanupInputs(inputPath, contextPath) {
   const resolvedInput = resolve(inputPath);
   const resolvedContext = resolve(contextPath);
@@ -334,6 +343,7 @@ export async function main(
   const write = dependencies.writeReviewHtml ?? writeReviewHtml;
   let result;
   let primaryError;
+  let preserveInputs = false;
 
   try {
     const review = await loadJsonDocument(
@@ -347,19 +357,28 @@ export async function main(
       MAX_CONTEXT_BYTES,
     );
     validateChangeRequest(storedContext);
-
-    const liveContext = assertLiveChangeRequestMatches(
-      storedContext,
-      await collect({ url: storedContext.url }),
-    );
-    validateReviewAgainstChangeRequest(review, liveContext);
+    validateReviewAgainstChangeRequest(review, storedContext);
 
     if (parsed.validateOnly) {
-      const finalSnapshot = await currentSnapshot({ url: storedContext.url });
-      assertSameSnapshot(liveContext, finalSnapshot);
       process.stdout.write("Hope review validation passed.\n");
       return { validated: true };
     }
+
+    let collectedContext;
+    try {
+      collectedContext = await collect({ url: storedContext.url });
+    } catch (error) {
+      if (isRetryableGitHubError(error)) {
+        preserveInputs = true;
+        throw new Error(
+          "Hope could not refresh the pull request from GitHub. The private inputs were kept; retry the same render command, or use cleanup-only mode to abandon it.",
+          { cause: error },
+        );
+      }
+      throw error;
+    }
+    const liveContext = assertLiveChangeRequestMatches(storedContext, collectedContext);
+    validateReviewAgainstChangeRequest(review, liveContext);
 
     result = await write(review, {
       changeRequest: liveContext,
@@ -378,8 +397,15 @@ export async function main(
           { cause: error },
         );
       }
+      if (isRetryableGitHubError(error)) {
+        preserveInputs = true;
+        throw new Error(
+          "Hope could not revalidate the pull request after rendering; the new HTML was removed. The private inputs were kept; retry the same render command, or use cleanup-only mode to abandon it.",
+          { cause: error },
+        );
+      }
       throw new Error(
-        "Hope could not revalidate the pull request after rendering; the new HTML was removed. Check GitHub access and try again.",
+        "Hope could not verify the final pull request response; the new HTML was removed.",
         { cause: error },
       );
     }
@@ -389,7 +415,7 @@ export async function main(
   }
 
   try {
-    if (parsed.cleanup) {
+    if (parsed.cleanup && !preserveInputs) {
       await cleanupTransientInputs([parsed.input, parsed.context]);
     }
   } catch (cleanupError) {
