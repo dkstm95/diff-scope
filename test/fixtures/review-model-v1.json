@@ -1,0 +1,461 @@
+{
+  "schemaVersion": 1,
+  "locale": "ko",
+  "title": "요청 식별자 검증 Hope Review",
+  "changeRequest": {
+    "provider": "github",
+    "repository": "dkstm95/example",
+    "id": "42",
+    "url": "https://github.com/dkstm95/example/pull/42",
+    "title": "Validate request identifiers at the router boundary",
+    "author": "review-author",
+    "state": "open",
+    "reviewStage": "ready",
+    "isDraft": false,
+    "baseSha": "1111111111111111111111111111111111111111",
+    "headSha": "3333333333333333333333333333333333333333",
+    "mergeBaseSha": "2222222222222222222222222222222222222222",
+    "comparison": {
+      "kind": "merge-base-to-head",
+      "fromSha": "2222222222222222222222222222222222222222",
+      "toSha": "3333333333333333333333333333333333333333"
+    },
+    "commitCount": 2,
+    "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "analysisPlan": {
+      "lineLimitPerPass": 4000,
+      "byteLimitPerPass": 65536,
+      "passes": [
+        {
+          "id": "pass-001",
+          "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "changedLines": 8,
+          "patchBytes": 256,
+          "patchIds": ["patch-0001"],
+          "paths": ["src/routing.mjs"]
+        },
+        {
+          "id": "pass-002",
+          "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "changedLines": 6,
+          "patchBytes": 256,
+          "patchIds": ["patch-0002"],
+          "paths": ["test/routing.test.mjs"]
+        }
+      ]
+    },
+    "coverage": {
+      "status": "complete",
+      "discoveredFiles": 2,
+      "representedFiles": 2,
+      "includedBodies": 2,
+      "metadataOnlyBodies": 0,
+      "additions": 12,
+      "deletions": 2,
+      "changedLines": 14,
+      "explainableChangedLines": 14,
+      "patchBytes": 512
+    },
+    "warnings": [],
+    "exclusions": [],
+    "files": [
+      {
+        "path": "src/routing.mjs",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 7,
+        "deletions": 1,
+        "bodyState": "included"
+      },
+      {
+        "path": "test/routing.test.mjs",
+        "previousPath": null,
+        "status": "modified",
+        "additions": 5,
+        "deletions": 1,
+        "bodyState": "included"
+      }
+    ]
+  },
+  "analysisCoverage": {
+    "inspectionProtocolVersion": 1,
+    "summary": {
+      "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "pageCount": 1,
+      "terminalReceipt": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "processedPasses": [
+      {
+        "id": "pass-001",
+        "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "pageCount": 1,
+        "terminalReceipt": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "summary": "라우터 변경에서 입력 검증과 정상 서비스 호출 경계를 확인했다.",
+        "evidenceIds": ["router-guard"]
+      },
+      {
+        "id": "pass-002",
+        "fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "pageCount": 1,
+        "terminalReceipt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "summary": "회귀 테스트에서 400 응답과 저장소 미호출 계약을 확인했다.",
+        "evidenceIds": ["routing-test"]
+      }
+    ]
+  },
+  "background": [
+    {
+      "id": "declared-goal",
+      "text": "PR 작성자는 잘못된 요청이 저장소에 도달하지 않게 하는 것을 목표로 밝혔다.",
+      "basis": "declared",
+      "evidenceIds": ["pr-description"]
+    }
+  ],
+  "overview": {
+    "summary": {
+      "id": "change-summary",
+      "text": "라우터가 서비스 호출 전에 누락된 식별자를 400 응답으로 종료한다.",
+      "basis": "observed",
+      "evidenceIds": ["router-guard", "routing-test"]
+    },
+    "observableChanges": [
+      {
+        "id": "bad-request-result",
+        "text": "식별자가 없는 요청은 저장소 조회 없이 missing_id 오류를 받는다.",
+        "basis": "observed",
+        "evidenceIds": ["router-guard", "routing-test"]
+      }
+    ],
+    "beforeAfter": [
+      {
+        "id": "request-boundary",
+        "area": "요청 경계",
+        "before": "식별자가 없어도 서비스와 저장소까지 호출이 진행됐다.",
+        "after": "라우터가 누락된 식별자를 발견하면 즉시 400 응답을 반환한다.",
+        "why": "잘못된 입력을 가장 가까운 경계에서 일관되게 종료한다.",
+        "basis": "observed",
+        "evidenceIds": ["router-guard", "routing-test"]
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "request-validation",
+      "title": "요청 검증 흐름",
+      "summary": "검증, 단락 반환, 정상 서비스 호출이 하나의 경로를 이룬다.",
+      "paths": ["src/routing.mjs"],
+      "steps": [
+        {
+          "id": "read-id",
+          "component": "라우터",
+          "behavior": "요청 식별자를 읽고 공백을 제거한 값이 비었는지 확인한다.",
+          "basis": "observed",
+          "evidenceIds": ["router-guard"]
+        },
+        {
+          "id": "short-circuit",
+          "component": "응답 경계",
+          "behavior": "누락이면 서비스 호출 전에 400과 missing_id를 반환한다.",
+          "basis": "observed",
+          "evidenceIds": ["router-guard", "routing-test"]
+        },
+        {
+          "id": "whitespace-contract",
+          "component": "클라이언트 계약",
+          "behavior": "공백 문자열을 누락과 동일하게 취급하는 것이 의도된 공개 계약인지는 확인되지 않았다.",
+          "basis": "unknown",
+          "evidenceIds": ["router-guard"]
+        }
+      ],
+      "evidenceIds": ["router-guard", "routing-test"]
+    },
+    {
+      "id": "regression-contract",
+      "title": "회귀 계약",
+      "summary": "테스트가 외부 응답과 내부 미호출 경계를 함께 고정한다.",
+      "paths": ["test/routing.test.mjs"],
+      "steps": [
+        {
+          "id": "assert-boundary",
+          "component": "라우팅 테스트",
+          "behavior": "400 응답과 저장소 호출 0회를 함께 검증한다.",
+          "basis": "observed",
+          "evidenceIds": ["routing-test"]
+        }
+      ],
+      "evidenceIds": ["routing-test"]
+    }
+  ],
+  "synthesis": {
+    "summary": {
+      "id": "system-synthesis",
+      "text": "라우터의 조기 종료와 테스트의 미호출 검증이 하나의 요청 경계 계약을 이룬다.",
+      "basis": "observed",
+      "evidenceIds": ["router-guard", "routing-test"]
+    },
+    "interactions": [
+      {
+        "id": "guard-to-contract",
+        "workstreamIds": ["request-validation", "regression-contract"],
+        "text": "라우터가 저장소 접근 전에 요청을 종료하고 테스트가 그 순서를 회귀 계약으로 고정한다.",
+        "basis": "observed",
+        "evidenceIds": ["router-guard", "routing-test"]
+      }
+    ]
+  },
+  "literateDiff": [
+    {
+      "id": "router-literate",
+      "path": "src/routing.mjs",
+      "role": "입력 경계와 서비스 호출 순서를 책임진다.",
+      "changes": [
+        {
+          "id": "guard-change",
+          "headline": "저장소 접근 전 guard 추가",
+          "explanation": "식별자가 없으면 400을 반환하고 정상 경로만 service.load로 진행한다.",
+          "evidenceIds": ["router-guard"]
+        }
+      ]
+    },
+    {
+      "id": "test-literate",
+      "path": "test/routing.test.mjs",
+      "role": "새 외부 동작과 저장소 미호출 불변 조건을 검증한다.",
+      "changes": [
+        {
+          "id": "boundary-test-change",
+          "headline": "400 응답과 미호출을 함께 검증",
+          "explanation": "응답 상태뿐 아니라 repository.calls가 0인지도 확인해 인과 경계를 고정한다.",
+          "evidenceIds": ["routing-test"]
+        }
+      ]
+    }
+  ],
+  "visuals": [
+    {
+      "id": "request-flow",
+      "kind": "flow",
+      "title": "변경 후 요청 흐름",
+      "caption": "잘못된 입력은 첫 단계에서 끝나고 유효한 입력만 서비스로 이동한다.",
+      "evidenceIds": ["router-guard"],
+      "steps": [
+        { "id": "flow-router", "label": "라우터", "detail": "식별자를 검증한다." },
+        { "id": "flow-service", "label": "서비스", "detail": "유효한 식별자만 처리한다." },
+        { "id": "flow-repository", "label": "저장소", "detail": "검증을 통과한 요청만 조회한다." }
+      ]
+    },
+    {
+      "id": "request-comparison",
+      "kind": "before-after",
+      "title": "누락 요청 비교",
+      "caption": "같은 입력이 변경 전후 어디에서 종료되는지 보여준다.",
+      "evidenceIds": ["router-guard", "routing-test"],
+      "items": [
+        {
+          "label": "식별자가 없음",
+          "before": "서비스와 저장소까지 전달돼 결과가 내부 상태에 의존한다.",
+          "after": "라우터에서 저장소 조회 없이 400으로 종료된다."
+        }
+      ]
+    }
+  ],
+  "visualOmissionReason": null,
+  "invariants": [
+    {
+      "id": "no-repository-call",
+      "text": "누락된 식별자는 저장소 조회를 만들지 않아야 한다.",
+      "basis": "observed",
+      "evidenceIds": ["routing-test"]
+    }
+  ],
+  "risks": [
+    {
+      "id": "other-entry-points",
+      "text": "라우터 외의 진입점이 같은 검증을 공유하지 않으면 동작이 달라질 수 있다.",
+      "basis": "inferred",
+      "evidenceIds": ["router-guard"]
+    }
+  ],
+  "decisions": [
+    {
+      "id": "router-boundary-decision",
+      "decision": "요청 식별자를 라우터에서 검증한다.",
+      "rationale": "잘못된 요청을 내부 계층에 전달하지 않는다.",
+      "tradeoff": "다른 진입점은 별도로 같은 규칙을 적용해야 한다.",
+      "basis": "declared",
+      "evidenceIds": ["pr-description", "validation-commit"]
+    }
+  ],
+  "verification": [
+    {
+      "id": "routing-tests-run",
+      "command": "node --test test/routing.test.mjs",
+      "status": "not-run",
+      "result": "Hope는 checkout이나 CI 결과를 수집하지 않으므로 이 명령을 실행하지 않았다.",
+      "evidenceIds": []
+    }
+  ],
+  "authorQuestions": [
+    {
+      "id": "ask-whitespace",
+      "question": "공백 문자열을 누락된 식별자와 동일하게 처리하는 것이 의도된 계약인가요?",
+      "why": "trim 호출이 기존 클라이언트가 보낸 공백 값의 결과도 바꾼다.",
+      "unknownClaimIds": ["whitespace-contract"],
+      "evidenceIds": ["router-guard"]
+    }
+  ],
+  "quiz": {
+    "passPercent": 67,
+    "questions": [
+      {
+        "id": "prediction-question",
+        "category": "prediction",
+        "type": "single",
+        "prompt": "식별자가 없을 때 변경 후 가장 먼저 일어나는 일은 무엇인가?",
+        "options": [
+          { "id": "return-400", "text": "라우터가 400을 반환한다." },
+          { "id": "query-store", "text": "저장소를 조회한다." },
+          { "id": "return-404", "text": "서비스가 404를 반환한다." }
+        ],
+        "correctOptionIds": ["return-400"],
+        "explanation": "라우터 guard가 서비스와 저장소 호출보다 먼저 실행된다.",
+        "evidenceIds": ["router-guard"]
+      },
+      {
+        "id": "invariant-question",
+        "category": "invariant",
+        "type": "multiple",
+        "prompt": "누락 요청에서 반드시 유지돼야 할 조건을 모두 고르시오.",
+        "options": [
+          { "id": "status-400", "text": "응답 상태가 400이다." },
+          { "id": "zero-calls", "text": "저장소 호출이 0회다." },
+          { "id": "status-404", "text": "응답 상태가 404다." }
+        ],
+        "correctOptionIds": ["status-400", "zero-calls"],
+        "explanation": "새 외부 결과와 내부 미호출 경계가 함께 테스트된다.",
+        "evidenceIds": ["routing-test"]
+      },
+      {
+        "id": "safe-change-question",
+        "category": "safe-change",
+        "type": "single",
+        "prompt": "다른 진입점에 같은 동작을 추가할 때 가장 안전한 확인은 무엇인가?",
+        "options": [
+          { "id": "shared-contract", "text": "같은 400과 미호출 계약을 테스트한다." },
+          { "id": "remove-guard", "text": "라우터 guard를 제거한다." }
+        ],
+        "correctOptionIds": ["shared-contract"],
+        "explanation": "진입점마다 외부 결과와 저장소 미호출을 함께 검증해야 한다.",
+        "evidenceIds": ["router-guard", "routing-test"]
+      }
+    ]
+  },
+  "microworld": {
+    "title": "식별자에 따른 요청 경로",
+    "instructions": "식별자 상태를 바꾸며 변경 전후의 실행 경로를 비교하세요.",
+    "evidenceIds": ["router-guard", "routing-test"],
+    "controls": [
+      {
+        "id": "request-id",
+        "label": "요청 식별자",
+        "defaultOptionId": "valid",
+        "options": [
+          { "id": "valid", "text": "유효함" },
+          { "id": "missing", "text": "누락됨" }
+        ]
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "valid-request",
+        "title": "유효한 요청",
+        "when": [{ "controlId": "request-id", "optionId": "valid" }],
+        "before": {
+          "steps": [{ "component": "라우터", "behavior": "서비스를 호출한다." }],
+          "outcome": "기존 성공 또는 404 경로"
+        },
+        "after": {
+          "steps": [
+            { "component": "라우터", "behavior": "검증을 통과한다." },
+            { "component": "서비스", "behavior": "요청을 처리한다." }
+          ],
+          "outcome": "기존 성공 또는 404 경로"
+        },
+        "lesson": "유효한 요청의 외부 계약은 유지된다."
+      },
+      {
+        "id": "missing-request",
+        "title": "누락된 요청",
+        "when": [{ "controlId": "request-id", "optionId": "missing" }],
+        "before": {
+          "steps": [
+            { "component": "라우터", "behavior": "빈 식별자를 전달한다." },
+            { "component": "저장소", "behavior": "불필요한 조회를 수행한다." }
+          ],
+          "outcome": "내부 상태에 따른 결과"
+        },
+        "after": {
+          "steps": [{ "component": "라우터", "behavior": "400 응답으로 즉시 종료한다." }],
+          "outcome": "저장소 조회 없는 400"
+        },
+        "lesson": "검증 경계가 결과를 일관되게 만든다."
+      }
+    ]
+  },
+  "ssotCandidates": [
+    {
+      "id": "preserve-boundary-contract",
+      "insight": "누락 요청은 저장소 조회를 만들지 않아야 한다.",
+      "whyDurable": "응답 상태만 검사하면 미래 리팩터링이 내부 미호출 계약을 깨뜨릴 수 있다.",
+      "target": "test",
+      "path": "test/routing.test.mjs",
+      "evidenceIds": ["routing-test"]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "pr-description",
+      "source": "pr-description",
+      "label": "PR description: reject invalid requests before storage",
+      "path": null,
+      "side": null,
+      "startLine": null,
+      "endLine": null,
+      "commitSha": null,
+      "excerpt": "Reject invalid requests before storage"
+    },
+    {
+      "id": "validation-commit",
+      "source": "commit",
+      "label": "Commit: validate request identifiers",
+      "path": null,
+      "side": null,
+      "startLine": null,
+      "endLine": null,
+      "commitSha": "4444444444444444444444444444444444444444",
+      "excerpt": "Validate request identifiers"
+    },
+    {
+      "id": "router-guard",
+      "source": "code",
+      "label": "Router guard and normal service path",
+      "path": "src/routing.mjs",
+      "side": null,
+      "startLine": null,
+      "endLine": null,
+      "commitSha": null,
+      "excerpt": "if (!request.id?.trim()) {\n  return { status: 400, code: \"missing_id\" };\n}\nreturn service.load(request.id);"
+    },
+    {
+      "id": "routing-test",
+      "source": "test",
+      "label": "Missing identifier regression test",
+      "path": "test/routing.test.mjs",
+      "side": null,
+      "startLine": null,
+      "endLine": null,
+      "commitSha": null,
+      "excerpt": "assert.equal(response.status, 400);\nassert.equal(repository.calls, 0);"
+    }
+  ]
+}

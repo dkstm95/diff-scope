@@ -1,9 +1,9 @@
 {
   "name": "hope",
-  "version": "0.2.0-alpha",
+  "version": "0.3.0-alpha",
   "private": true,
   "type": "module",
-  "description": "Align intent before coding and understand the resulting change before merge.",
+  "description": "Understand GitHub pull request changes before merge through explanation, a quiz, and an interactive review.",
   "license": "MIT",
   "engines": {
     "node": ">=20"

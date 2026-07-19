@@ -1,7 +1,7 @@
 {
   "name": "hope",
-  "version": "0.2.0-alpha",
-  "description": "Align intent before coding and understand the resulting change before merge.",
+  "version": "0.3.0-alpha",
+  "description": "Understand any supported GitHub pull request before review or merge through a clear explanation, key code, risks, an interactive model, and a quiz.",
   "author": {
     "name": "SeungIl",
     "url": "https://github.com/dkstm95"
@@ -9,17 +9,17 @@
   "homepage": "https://github.com/dkstm95/hope#readme",
   "repository": "https://github.com/dkstm95/hope",
   "license": "MIT",
-  "keywords": ["align", "intent", "diff", "code-review", "learning", "microworld"],
+  "keywords": ["diff", "pull-request", "change-request", "code-review", "code-understanding", "learning", "interactive-review"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Hope",
-    "shortDescription": "Align intent and understand changes",
-    "longDescription": "Align human and AI intent before coding, then compare it with the exact local change through evidence, a quiz, and a safe offline interactive microworld.",
+    "shortDescription": "Understand a PR before review or merge",
+    "longDescription": "Give Hope a GitHub pull request URL. It creates one private offline review that explains what changed and why, maps the behavior, highlights risks and key code, lets you try important scenarios, and checks your understanding.",
     "developerName": "SeungIl",
     "category": "Engineering",
     "capabilities": ["Read", "Write", "Interactive"],
     "defaultPrompt": [
-      "Align with me before coding, then help me understand the resulting change."
+      "Use $hope:diff with a GitHub pull request URL to explain what changed, show the behavior, risks, and key code, let me try important scenarios, and check my understanding."
     ],
     "brandColor": "#5B5BD6",
     "composerIcon": "./assets/telescope.svg",
