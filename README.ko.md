@@ -76,7 +76,7 @@ Hope는 하나의 완전한 Change Request와 파일 지도를 수집한 뒤 결
 text만 들어간다. 따라서 큰 pull request도 하나의 과도하게 큰 prompt나 임의로
 잘린 앞부분이 아니라 여러 개의 제한된 pass로 다룬다.
 
-Summary와 pass view는 각각 최대 8 KiB인 compact page로 전달된다. 다음 page를
+Summary와 pass view는 각각 최대 16 KiB인 compact page로 전달된다. 다음 page를
 받으려면 바로 앞 page의 snapshot-bound receipt가 필요하고, Review Model은 page
 count와 terminal receipt를 활성 세션의 inspection attestation으로 기록한다.
 Validator는 이 attestation이 정확한 결정론적 view에 연결되는지 확인하지만, AI가
@@ -107,16 +107,20 @@ hope-review.html
 
 로컬 browser에서 열면 된다. 네트워크 연결 없이 다음 내용을 볼 수 있다.
 
-- PR 제목, 짧은 요약, 간결한 분석 범위 안내
+- 짧은 리뷰 제목, 원본 PR 링크, 명확한 변경 코드 수집 범위
 - 무엇이 왜 바뀌었는지와 변경 전후 동작
 - 변경을 명확하게 만드는 before/after panel, flow, decision table 시각화
 - 주요 동작 흐름과 흐름 사이의 영향
 - 반드시 지켜야 할 조건, 위험, 결정, 검증 한계, 확인할 질문
-- 핵심 코드 근거와 설명을 연결한 코드 따라보기
+- 핵심 코드 따라보기와, 원문이 페이지마다 반복되지 않는 하나의 근거 색인
 - 탐색이 이해에 도움이 될 때 제공하는 동작 실험과, 그 뒤에 이어지는
   자동 채점 이해도 질문 3~5개
 - 프로젝트의 장기 지식으로 승격할 수 있는 선택적 후보
 - 정확한 PR 버전, 전체 파일 목록, 분석 범위를 담은 접힌 세부 정보
+
+“변경 코드: 모두 확인”은 PR diff에서 바뀐 코드 부분을 모두 확인했다는 뜻이다.
+PR 설명과 커밋 제목도 근거로 사용한다. 이번 alpha는 그 부분 밖의 코드, PR
+토론, 리뷰 댓글, CI 결과를 수집하지 않는다.
 
 동작 실험은 의도적으로 선택 사항이다. 다이어그램과 질문이 더 적합한 변경에는
 장식용 시뮬레이터를 만들지 않는다.
@@ -128,8 +132,11 @@ hope-review.html
 
 Hope는 내부에서 하나의 완전한 구조화 Change Request, 크기가 제한된 inspector
 pass, 검증된 review model을 사용하지만 그 상태는 모두 일시적이다. 먼저 비공개
-입력을 삭제하지 않고 Review Model을 검증하며, 오류가 있으면 수정해 다시 검증할 수
-있다. 최종 렌더링이나 명시적인 포기 cleanup 뒤에는 비공개 입력을 제거한다. Pass별
+입력을 삭제하지 않고 Review Model을 오프라인으로 검증하며, 오류가 있으면 수정해
+다시 검증할 수 있다. 최종 렌더링이나 명시적인 포기 cleanup 뒤에는 비공개 입력을
+제거한다. 일시적인 GitHub 오류 때는 현재 Hope 작업이 같은 렌더링을 한 번
+재시도할 수 있도록 입력을 유지하며, 재시도도 실패하거나 포기하면 cleanup으로
+제거해 쌓이지 않게 한다. Pass별
 report, `intent.json`, `artifact.json`, 별도 Markdown 설명을 사용자 산출물로
 만들지 않는다.
 
@@ -202,7 +209,7 @@ snapshot은 결과를 만들지 않고 중단한다.
 현재 GitHub alpha는 정규화된 전체 변경 summary가 128 KiB 이하일 때만 commit
 250개와 변경 파일 200개까지 지원한다. 전체 변경 줄은 20,000개, 파일 하나의 안전한
 patch text는 256 KiB, 전체 안전한 patch text는 768 KiB까지 지원한다. Pull request
-설명은 32 KiB까지 수집하고 inspector page는 계속 8 KiB 이하로 유지한다. 이는 pass
+설명은 32 KiB까지 수집하고 inspector page는 계속 16 KiB 이하로 유지한다. 이는 pass
 경계가 아니라 활성 구독 세션에서 model에 노출할 수 있는 정직한 안전 상한이다.
 Hope는 paging 전에 이 상한을 확인하며, 하나라도 넘으면 불완전하거나 실제로 끝낼 수
 없는 설명을 만드는 대신 review를 중단한다.
@@ -241,7 +248,7 @@ plugins/hope/                        배포 플러그인
   .codex-plugin/plugin.json
   skills/diff/                       pull request 이해 workflow
     scripts/inspect-change-request.mjs 제한된 summary와 pass inspector
-    scripts/lib/inspection-pages.mjs 8 KiB receipt-chain 전송
+    scripts/lib/inspection-pages.mjs 16 KiB receipt-chain 전송
 test/                                결정론적 contract와 runtime 테스트
 tools/check-release.mjs              릴리스 일관성 검사
 ```

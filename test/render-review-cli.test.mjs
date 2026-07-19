@@ -386,8 +386,12 @@ test("validates without rendering or removing retryable inputs", async (t) => {
       "--validate-only",
     ],
     {
-      collectChangeRequest: async () => clone(context),
-      readCurrentSnapshot: async () => clone(context),
+      collectChangeRequest: async () => {
+        throw new Error("validate-only must not call GitHub");
+      },
+      readCurrentSnapshot: async () => {
+        throw new Error("validate-only must not call GitHub");
+      },
       writeReviewHtml: async () => {
         writes += 1;
         return { file: "unreachable" };
@@ -464,13 +468,26 @@ test("recollects the full Change Request and rejects a locally re-fingerprinted 
   const liveContext = contextFor(review);
   const storedContext = clone(liveContext);
   const firstPatch = storedContext.patches[0];
-  firstPatch.text = firstPatch.text.replace("missing_id", "missing_ix");
+  firstPatch.text = firstPatch.text.replace("audit.validated", "audit.validatex");
   const firstPass = storedContext.analysisPlan.passes[0];
   firstPass.fingerprint = calculateAnalysisPassFingerprint(firstPass, [firstPatch]);
   storedContext.fingerprint = calculateChangeRequestFingerprint(storedContext);
   review.changeRequest.analysisPlan = clone(storedContext.analysisPlan);
   review.changeRequest.fingerprint = storedContext.fingerprint;
   review.analysisCoverage.processedPasses[0].fingerprint = firstPass.fingerprint;
+  review.analysisCoverage.summary = {
+    fingerprint: storedContext.fingerprint,
+    ...inspectionCompletion(buildInspectionPages(storedContext, { kind: "summary" })),
+  };
+  review.analysisCoverage.processedPasses.forEach((processedPass) => {
+    Object.assign(
+      processedPass,
+      inspectionCompletion(buildInspectionPages(storedContext, {
+        kind: "pass",
+        passId: processedPass.id,
+      })),
+    );
+  });
   const inputs = await putInputs(t, review, storedContext);
   let writes = 0;
 
@@ -524,6 +541,7 @@ test("removes a rendered HTML when the final snapshot is stale", async (t) => {
     /changed before the Hope review was finalized/u,
   );
   await assert.rejects(lstat(outputDirectory), { code: "ENOENT" });
+  await assert.rejects(lstat(inputs.directory), { code: "ENOENT" });
 });
 
 test("fails closed with a distinct message when final revalidation is unavailable", async (t) => {
@@ -554,6 +572,82 @@ test("fails closed with a distinct message when final revalidation is unavailabl
     /could not revalidate/u,
   );
   await assert.rejects(lstat(outputDirectory), { code: "ENOENT" });
+  assert.equal((await lstat(inputs.input)).isFile(), true);
+  assert.equal((await lstat(inputs.contextPath)).isFile(), true);
+  assert.equal((await lstat(inputs.directory)).isDirectory(), true);
+
+  const retried = await main(
+    [
+      "--input",
+      inputs.input,
+      "--context",
+      inputs.contextPath,
+      "--cleanup",
+    ],
+    {
+      collectChangeRequest: async () => clone(context),
+      readCurrentSnapshot: async () => clone(context),
+    },
+  );
+  t.after(async () => await rm(dirname(retried.file), { recursive: true, force: true }));
+  await assert.rejects(lstat(inputs.directory), { code: "ENOENT" });
+});
+
+test("cleans inputs after a non-retryable final GitHub response", async (t) => {
+  const review = await fixture();
+  const context = contextFor(review);
+  const inputs = await putInputs(t, review, context);
+  const outputDirectory = await mkdtemp(join(tmpdir(), "hope-review-"));
+  const output = join(outputDirectory, "hope-review.html");
+  await writeFile(output, "rendered");
+
+  await assert.rejects(
+    main(
+      [
+        "--input",
+        inputs.input,
+        "--context",
+        inputs.contextPath,
+        "--cleanup",
+      ],
+      {
+        collectChangeRequest: async () => clone(context),
+        readCurrentSnapshot: async () => {
+          throw new GhApiError("malformed", "invalid-response");
+        },
+        writeReviewHtml: async () => ({ file: output }),
+      },
+    ),
+    /could not verify the final/u,
+  );
+  await assert.rejects(lstat(outputDirectory), { code: "ENOENT" });
+  await assert.rejects(lstat(inputs.directory), { code: "ENOENT" });
+});
+
+test("keeps retryable inputs when the initial GitHub refresh is unavailable", async (t) => {
+  const review = await fixture();
+  const context = contextFor(review);
+  const inputs = await putInputs(t, review, context);
+
+  await assert.rejects(
+    main(
+      [
+        "--input",
+        inputs.input,
+        "--context",
+        inputs.contextPath,
+        "--cleanup",
+      ],
+      {
+        collectChangeRequest: async () => {
+          throw new GhApiError("offline", "transport");
+        },
+      },
+    ),
+    /private inputs were kept/u,
+  );
+  assert.equal((await lstat(inputs.input)).isFile(), true);
+  assert.equal((await lstat(inputs.contextPath)).isFile(), true);
 });
 
 test("keeps the primary parse error while cleaning malformed Hope inputs", async (t) => {

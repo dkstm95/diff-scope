@@ -70,8 +70,20 @@ function isSafeReference(value) {
   return (
     /^(?:process\.env|os\.environ|env|config|settings|secrets?)(?:(?:\.|\?\.)[a-z_$][a-z0-9_$.-]*|(?:\?\.)?[ \t]*\[[ \t]*(?:"[^"]*"|'[^']*'|`[^`]*`)[ \t]*\])+$/iu.test(normalized) ||
     /^\$[a-z_][a-z0-9_]*$/iu.test(normalized) ||
-    /^(?:null|undefined|none|false)$/iu.test(normalized) ||
+    /^(?:null|undefined|none|false|true)$/iu.test(normalized) ||
     /^[a-z_$][a-z0-9_$.]*[ \t]*\([^\r\n"'`]*\)$/iu.test(normalized)
+  );
+}
+
+function isCancellationTokenAnnotation(key, value) {
+  let normalized = value.trim();
+  normalized = normalized.replace(/\)\s*:\s*[^\r\n]*$/u, "").replace(/\)\s*$/u, "").trim();
+  return (
+    (
+      keyTokens(key).at(-1) === "token" &&
+      /^CancellationToken(?:\s*=\s*CancellationToken\.None)?$/u.test(normalized)
+    ) ||
+    (key === "CancellationToken" && normalized === "CancellationToken.None")
   );
 }
 
@@ -114,6 +126,7 @@ function isDetectorDefinitionOpener(key, value, quoted) {
 
 function assignmentIsUnsafe(key, value, quoted) {
   if (isDetectorDefinitionOpener(key, value, quoted)) return false;
+  if (!quoted && isCancellationTokenAnnotation(key, value)) return false;
   return !isPlaceholder(value) && (quoted || !isSafeReference(value));
 }
 

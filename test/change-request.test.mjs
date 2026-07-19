@@ -359,6 +359,21 @@ test("compares a full context with a metadata-only snapshot", async () => {
     () => assertSameSnapshot(firstVersionedSnapshot, secondVersionedSnapshot),
     SnapshotChangedError,
   );
+
+  const firstTimestamp = await readCurrentSnapshot({
+    url: context.url,
+    runner: makeRunner({
+      before: pull({ updated_at: "2026-07-18T00:00:00Z" }),
+    }).runner,
+  });
+  const secondTimestamp = await readCurrentSnapshot({
+    url: context.url,
+    runner: makeRunner({
+      before: pull({ updated_at: "2026-07-18T00:00:01Z" }),
+    }).runner,
+  });
+  assert.equal(firstTimestamp.snapshotFingerprint, secondTimestamp.snapshotFingerprint);
+  assert.equal(assertSameSnapshot(firstTimestamp, secondTimestamp), secondTimestamp);
 });
 
 test("redacts credentials without leaking raw values and marks coverage partial", async () => {
@@ -389,6 +404,34 @@ test("redacts credentials without leaking raw values and marks coverage partial"
   assert.doesNotMatch(serialized, /old-credential-value|ghp_abcdefghijklmnopqrstuvwxyz/u);
   assert.equal(context.patches.some((patch) => patch.path === "src/config.js"), false);
   assert.ok(context.exclusions.some((entry) => entry.reason === "suspected-secret-redacted"));
+});
+
+test("keeps TypeScript cancellation-token annotations as ordinary code", async () => {
+  const patch = [
+    "@@ -1,2 +1,4 @@",
+    "-run(task);",
+    "+run(task, token: CancellationToken);",
+    "+async function stop(token: CancellationToken = CancellationToken.None): Promise<void> {",
+    "+  await runner.stop(token);",
+    "+}",
+  ].join("\n");
+  const context = await collectChangeRequest({
+    url: "https://github.com/acme/widgets/pull/17",
+    runner: makeRunner({
+      before: pull({ commits: 1, changed_files: 1 }),
+      commits: [[commit(SHA.head, "Add cancellation support")]],
+      files: [[modifiedFile({
+        filename: "src/runner.ts",
+        additions: 4,
+        deletions: 1,
+        patch,
+      })]],
+    }).runner,
+  });
+
+  assert.equal(context.coverage.status, "complete");
+  assert.equal(fileAt(context, "src/runner.ts").bodyState, "included");
+  assert.equal(patchTextFor(context, "src/runner.ts"), patch);
 });
 
 test("keeps only the safe metadata prefix before an encoded multiline secret", async () => {
