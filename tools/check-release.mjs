@@ -7,7 +7,7 @@ const root = new URL("../", import.meta.url);
 const fromRoot = (relativePath) => new URL(relativePath, root);
 const read = async (relativePath) => await readFile(fromRoot(relativePath), "utf8");
 const readJson = async (relativePath) => JSON.parse(await read(relativePath));
-const currentVersion = "0.3.0-alpha";
+const currentVersion = "0.3.1-alpha";
 
 const requiredFiles = [
   ".agents/plugins/marketplace.json",
@@ -27,6 +27,7 @@ const requiredFiles = [
   "plugins/hope/skills/diff/scripts/lib/safety.mjs",
   "plugins/hope/skills/diff/scripts/lib/validate-review.mjs",
   "plugins/hope/skills/diff/scripts/lib/render-review.mjs",
+  "plugins/hope/skills/diff/scripts/lib/review-retention.mjs",
   "README.md",
   "README.ko.md",
   "CHANGELOG.md",
@@ -70,6 +71,7 @@ const [
   diffSkill,
   diffOpenAi,
   diffInspector,
+  reviewRetention,
   readme,
   readmeKo,
   changelog,
@@ -85,6 +87,7 @@ const [
   read("plugins/hope/skills/diff/SKILL.md"),
   read("plugins/hope/skills/diff/agents/openai.yaml"),
   read("plugins/hope/skills/diff/scripts/inspect-change-request.mjs"),
+  read("plugins/hope/skills/diff/scripts/lib/review-retention.mjs"),
   read("README.md"),
   read("README.ko.md"),
   read("CHANGELOG.md"),
@@ -138,6 +141,13 @@ assert.match(diffInspector, /--pass/u);
 assert.match(diffInspector, /--after/u);
 assert.match(diffInspector, /MAX_INSPECTION_OUTPUT_BYTES/u);
 assert.match(diffInspector, /validateChangeRequest/u);
+assert.match(reviewRetention, /DEFAULT_REVIEW_RETENTION_MS\s*=\s*7\s*\*/u);
+assert.match(reviewRetention, /MANAGED_REVIEW_MARKER/u);
+assert.match(reviewRetention, /parseManagedReviewMarker/u);
+assert.match(reviewRetention, /stickySharedRoot/u);
+assert.match(reviewRetention, /currentUid/u);
+assert.match(reviewRetention, /isSymbolicLink/u);
+assert.doesNotMatch(reviewRetention, /birthtimeMs|ctimeMs|mtimeMs/u);
 assert.match(reviewContract, /analysisPlan/u);
 assert.match(reviewContract, /analysisCoverage\.processedPasses/u);
 assert.match(reviewContract, /terminal receipt/u);
@@ -189,12 +199,14 @@ for (const document of [readme, readmeKo]) {
   assert.match(document, /768\s+KiB/u);
   assert.match(document, /128\s+KiB/u);
   assert.match(document, /no (?:cache|network)|캐시/u);
+  assert.match(document, /eligibleAfter/u);
   assert.match(document, new RegExp(`v${currentVersion.replaceAll(".", "\\.")}`, "u"));
   assert.doesNotMatch(document, /\$hope:align|HEAD\s*->\s*(?:current )?working tree/u);
 }
 assert.doesNotMatch(readme, /fixed interface uses English/u);
 assert.doesNotMatch(readmeKo, /고정 UI는 영어/u);
 
+assert.match(changelog, /^## 0\.3\.1-alpha /mu);
 assert.match(changelog, /^## 0\.3\.0-alpha /mu);
 assert.match(changelog, /^## 0\.2\.0-alpha /mu);
 assert.match(changelog, /^## 0\.1\.0-alpha /mu);

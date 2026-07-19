@@ -884,12 +884,22 @@ test("serializes selected excerpts as inert data and renders them only with text
 
 test("writes one private Hope Review file by default", async (t) => {
   const review = await fixture();
-  const result = await writeReviewHtml(review, { changeRequest: changeRequestForReview(review) });
-  t.after(() => rm(dirname(result.file), { recursive: true, force: true }));
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "hope-review-root-"));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const result = await writeReviewHtml(review, {
+    changeRequest: changeRequestForReview(review),
+    temporaryRoot,
+  });
   assert.equal(basename(result.file), "hope-review.html");
   assert.match(basename(dirname(result.file)), /^hope-review-/u);
   assert.deepEqual(await readdir(dirname(result.file)), ["hope-review.html"]);
-  assert.match(await readFile(result.file, "utf8"), /<title>Hope 리뷰<\/title>/u);
+  const source = await readFile(result.file, "utf8");
+  const marker = /^<!-- Hope-managed temporary review; eligibleAfter=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z) -->\n<!doctype html>[\s\S]*<title>Hope 리뷰<\/title>/u.exec(
+    source,
+  );
+  assert.notEqual(marker, null);
+  assert.match(result.eligibleAfter, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u);
+  assert.equal(marker[1], result.eligibleAfter);
   if (process.platform !== "win32") {
     assert.equal(mode(await stat(dirname(result.file))), 0o700);
     assert.equal(mode(await stat(result.file)), 0o600);
@@ -905,7 +915,9 @@ test("writes an explicit new HTML file without overwriting existing paths", asyn
   const output = join(parent, "review.html");
   const result = await writeReviewHtml(review, { changeRequest: context, outputFile: output });
   assert.equal(result.file, output);
+  assert.equal(result.eligibleAfter, null);
   assert.deepEqual(await readdir(parent), ["review.html"]);
+  assert.doesNotMatch(await readFile(output, "utf8"), /Hope-managed temporary review/u);
 
   await assert.rejects(
     writeReviewHtml(review, { changeRequest: context, outputFile: output }),
@@ -929,6 +941,49 @@ test("writes an explicit new HTML file without overwriting existing paths", asyn
     }),
     /symlink output parent/,
   );
+});
+
+test("a later default render removes an eligible managed review", async (t) => {
+  const review = await fixture();
+  const context = changeRequestForReview(review);
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "hope-review-cycle-"));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+
+  const first = await writeReviewHtml(review, {
+    changeRequest: context,
+    temporaryRoot,
+  });
+  const second = await writeReviewHtml(review, {
+    changeRequest: context,
+    nowMs: Date.parse(first.eligibleAfter),
+    temporaryRoot,
+  });
+
+  await assert.rejects(lstat(dirname(first.file)), { code: "ENOENT" });
+  assert.equal((await lstat(second.file)).isFile(), true);
+});
+
+test("a default retention pass never removes an explicit export", async (t) => {
+  const review = await fixture();
+  const context = changeRequestForReview(review);
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "hope-review-export-root-"));
+  t.after(() => rm(temporaryRoot, { recursive: true, force: true }));
+  const exportDirectory = join(temporaryRoot, "hope-review-EXPRT1");
+  await mkdir(exportDirectory, { mode: 0o700 });
+  const exportFile = join(exportDirectory, "hope-review.html");
+
+  const exported = await writeReviewHtml(review, {
+    changeRequest: context,
+    outputFile: exportFile,
+  });
+  await writeReviewHtml(review, {
+    changeRequest: context,
+    nowMs: Date.now() + 8 * 24 * 60 * 60 * 1_000,
+    temporaryRoot,
+  });
+
+  assert.equal(exported.eligibleAfter, null);
+  assert.equal((await lstat(exportFile)).isFile(), true);
 });
 
 test("validates and binds before creating output", async (t) => {

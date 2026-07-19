@@ -8,6 +8,12 @@ import {
   validateReviewAgainstChangeRequest,
   validateReviewModel,
 } from "./validate-review.mjs";
+import {
+  cleanupExpiredDefaultReviews,
+  defaultReviewEligibleAfter,
+  eligibleAfterFromCreation,
+  managedReviewMarker,
+} from "./review-retention.mjs";
 
 const REVIEW_STYLE = String.raw`:root {
   color-scheme: light;
@@ -1077,11 +1083,23 @@ async function pathExists(path) {
   catch (error) { if (error?.code === "ENOENT") return false; throw error; }
 }
 
-async function chooseOutputFile(outputFile) {
+async function chooseOutputFile(outputFile, options) {
   if (outputFile === undefined) {
-    const directory = await mkdtemp(join(tmpdir(), "hope-review-"));
+    const temporaryRoot = resolve(options.temporaryRoot ?? tmpdir());
+    if (options.nowMs !== undefined) eligibleAfterFromCreation(options.nowMs);
+    await cleanupExpiredDefaultReviews({
+      temporaryRoot,
+      nowMs: options.nowMs,
+    });
+    const directory = await mkdtemp(join(temporaryRoot, "hope-review-"));
     await chmod(directory, 0o700);
-    return { file: join(directory, "hope-review.html"), privateDirectory: directory };
+    const eligibleAfter = eligibleAfterFromCreation(options.nowMs ?? Date.now());
+    return {
+      eligibleAfter,
+      file: join(directory, "hope-review.html"),
+      privateDirectory: directory,
+      temporaryRoot,
+    };
   }
   if (typeof outputFile !== "string" || outputFile.trim().length === 0) throw new TypeError("outputFile must be a non-empty path");
   const file = resolve(outputFile);
@@ -1090,14 +1108,17 @@ async function chooseOutputFile(outputFile) {
   const parentStatus = await stat(dirname(file));
   if (!parentStatus.isDirectory()) throw new Error(`Output parent is not a directory: ${dirname(file)}`);
   if ((await lstat(dirname(file))).isSymbolicLink()) throw new Error(`Refusing a symlink output parent: ${dirname(file)}`);
-  return { file, privateDirectory: null };
+  return { eligibleAfter: null, file, privateDirectory: null, temporaryRoot: null };
 }
 
 export async function writeReviewHtml(review, options = {}) {
   if (options.changeRequest === undefined) throw new ChangeRequestBindingError(["ChangeRequestV1 is required before rendering"]);
   validateReviewAgainstChangeRequest(review, options.changeRequest);
-  const html = renderReviewHtml(review);
-  const output = await chooseOutputFile(options.outputFile);
+  const renderedHtml = renderReviewHtml(review);
+  const output = await chooseOutputFile(options.outputFile, options);
+  const html = output.privateDirectory === null
+    ? renderedHtml
+    : `${managedReviewMarker(output.eligibleAfter)}${renderedHtml}`;
   const temporaryFile = join(dirname(output.file), `.${basename(output.file)}.${randomBytes(8).toString("hex")}.tmp`);
   let published = false;
   try {
@@ -1112,5 +1133,18 @@ export async function writeReviewHtml(review, options = {}) {
     if (output.privateDirectory !== null) await rm(output.privateDirectory, { recursive: true, force: true });
     throw error;
   }
-  return { file: output.file };
+  const parsedEligibleAfter = output.privateDirectory === null
+    ? null
+    : await defaultReviewEligibleAfter(output.file, {
+      temporaryRoot: output.temporaryRoot,
+    });
+  if (
+    output.privateDirectory !== null &&
+    parsedEligibleAfter !== output.eligibleAfter
+  ) {
+    await rm(output.file, { force: true });
+    await rm(output.privateDirectory, { recursive: true, force: true });
+    throw new Error("Hope could not establish the temporary review retention time");
+  }
+  return { file: output.file, eligibleAfter: parsedEligibleAfter };
 }

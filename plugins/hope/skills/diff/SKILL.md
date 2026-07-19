@@ -274,14 +274,29 @@ live base, head, and relevant metadata. A changed snapshot or context mismatch
 removes or prevents the newly created review.
 
 By default, the renderer creates one `hope-review.html` in a new private OS
-temporary directory. Use this form only when the user explicitly asks to export
-the review:
+temporary directory. Stdout remains exactly one file-path line for compatibility;
+the returned result and a `Hope retention: eligibleAfter=<ISO-8601 time>` stderr
+handoff notice carry the exact retention time. A default review becomes eligible
+seven days after creation; the renderer embeds that exact strict ISO value in
+the first-line Hope marker and treats it as authoritative even if the file is
+later touched. It is removed only by a later default render after that time.
+Before scanning on POSIX, require the temporary root to be current-user private
+or a root/current-user-owned sticky shared directory. Preserve every candidate
+unless its Hope marker, direct temporary-directory location, name, sole-file
+structure, available ownership and private-permission checks, regular-file link
+count, and non-symlink checks all match. Do not create a registry, cache,
+database, or separate cleanup artifact.
+
+Use this form only when the user explicitly asks to export the review:
 
 ```bash
 node <skill-dir>/scripts/render-review.mjs --input <review-model.json> --context <change-request.json> --output <new-html-file> --cleanup
 ```
 
-Never overwrite a path, open a browser, edit `.gitignore`, commit, publish, attach
+An explicit export has no managed-temporary marker, can never be deleted by
+retention cleanup, and has no `eligibleAfter` value. A matching temporary path
+may be inspected and rejected. Never overwrite a path,
+open a browser, edit `.gitignore`, commit, publish, attach
 the HTML to the pull request, post a comment, approve, close, or merge. Never
 apply a knowledge candidate without a separate explicit request and human
 confirmation.
@@ -289,7 +304,9 @@ confirmation.
 If model generation, validation, or rendering is abandoned before the normal
 `--cleanup` completes, run the cleanup-only command from step 2. A correctable
 validation error is not abandonment: fix and retry it first. Do not delete the
-final HTML after successful rendering; the user controls its disposal.
+final HTML during the active handoff. The user may remove a default review
+earlier; otherwise the first safe default render after `eligibleAfter` may do
+so. The user alone controls an explicit export.
 
 ## 6. Verify and hand off
 
@@ -301,13 +318,16 @@ path plus:
 - abbreviated base, merge-base, and head SHAs;
 - discovery, body, and analysis coverage plus any partial warnings;
 - verification limits and unknowns;
-- questions that need the author or user's judgment.
+- questions that need the author or user's judgment; and
+- the exact `eligibleAfter` time for a default temporary review, or a clear note
+  that an explicit export is not managed by Hope.
 
 Do not claim that passing the quiz proves complete understanding. Explain that
 the review is a snapshot: a later force-push, base update, or relevant pull
 request metadata change requires a fresh `$hope:diff` run.
 
 The HTML is a disposable learning view, not project SSOT. Do not maintain an
-index or cache. After review or merge, the user may delete it or intentionally
-retain it for audit or education. A human or AI may merge independently; Hope is
-not part of the merge path.
+index or cache. After review or merge, the user may delete a default review
+immediately; otherwise it is eligible for safe next-run cleanup at the reported
+time. An explicit export may be intentionally retained for audit or education.
+A human or AI may merge independently; Hope is not part of the merge path.

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.1-alpha - 2026-07-19
+
+- Give every default private Hope Review an immutable, strict ISO
+  `eligibleAfter` marker fixed seven days after creation and report the same
+  value in the renderer handoff; later filesystem timestamp changes do not move
+  it.
+- Before a later default render, remove only eligible Hope-managed temporary
+  review directories whose location, name, marker, ownership, permissions,
+  sole-file structure, link count, and non-symlink checks all match, and scan a
+  POSIX temporary root only when it is private or safely sticky-shared.
+- Keep cleanup best-effort and concurrency-safe without adding a cache,
+  registry, database, background process, or project artifact.
+- Exclude explicit exports from retention management; their paths and lifetime
+  remain entirely user-controlled.
+
 ## 0.3.0-alpha - 2026-07-18
 
 Hope narrows its alpha to one job: helping a person understand a GitHub pull

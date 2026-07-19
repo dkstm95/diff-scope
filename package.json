@@ -1,6 +1,6 @@
 {
   "name": "hope",
-  "version": "0.3.0-alpha",
+  "version": "0.3.1-alpha",
   "private": true,
   "type": "module",
   "description": "Understand GitHub pull request changes before merge through explanation, a quiz, and an interactive review.",

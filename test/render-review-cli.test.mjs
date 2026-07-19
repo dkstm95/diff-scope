@@ -20,6 +20,8 @@ import {
   calculateChangeRequestFingerprint,
 } from "../plugins/hope/skills/diff/scripts/collect-change-request.mjs";
 import {
+  formatRenderPath,
+  formatRetentionHandoff,
   loadJsonDocument,
   main,
   MAX_REVIEW_FILE_BYTES,
@@ -32,6 +34,22 @@ import {
 
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(testDirectory, "fixtures", "review-model-v1.json");
+
+test("keeps stdout path-only while exposing exact retention handoff metadata", () => {
+  const result = {
+    file: "/private/tmp/hope-review-ABC123/hope-review.html",
+    eligibleAfter: "2026-07-26T12:34:56.789Z",
+  };
+  assert.equal(
+    formatRenderPath(result),
+    "/private/tmp/hope-review-ABC123/hope-review.html\n",
+  );
+  assert.equal(
+    formatRetentionHandoff(result),
+    "Hope retention: eligibleAfter=2026-07-26T12:34:56.789Z\n",
+  );
+  assert.equal(formatRetentionHandoff({ file: "/export/review.html" }), "");
+});
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
