@@ -17,7 +17,7 @@ an auto-scored understanding check.
 Hope runs inside your active Codex subscription session. It needs no OpenAI API
 key, model configuration, server, nested model call, cache, or database.
 
-> **Alpha:** `v0.3.0-alpha` focuses on GitHub pull requests. Interfaces and
+> **Alpha:** `v0.3.1-alpha` focuses on GitHub pull requests. Interfaces and
 > schemas may change as this workflow is dogfooded.
 
 ## Install
@@ -32,7 +32,7 @@ Requirements:
 Install Hope from its tagged marketplace:
 
 ```bash
-codex plugin marketplace add dkstm95/hope --ref v0.3.0-alpha
+codex plugin marketplace add dkstm95/hope --ref v0.3.1-alpha
 codex plugin add hope@hope
 ```
 
@@ -148,15 +148,30 @@ By default, the HTML lives in a private OS temporary directory. Hope does not:
 - post comments, approve, close, or merge the pull request;
 - write knowledge candidates into the target repository.
 
+Before creating a default temporary review, Hope safely removes its own default
+reviews that have been eligible for cleanup for at least seven days. The render
+handoff includes the exact `eligibleAfter` time embedded in the review's first
+line when it is created. Touching the file does not move that authoritative
+time. Cleanup happens only on a later default render, so a review is not deleted
+by a background process at that instant. Anything with an unexpected name,
+marker, structure, or symbolic link is preserved. Hope also requires the
+expected owner and private permissions on platforms that expose those checks.
+On POSIX, it scans only a current-user-private or safely sticky-shared temporary
+root.
+
 The user may explicitly request an exported HTML file. Hope still refuses to
-overwrite an existing path or publish it automatically.
+overwrite an existing path or publish it automatically. Exports do not carry
+the managed-temporary marker and can never qualify for deletion. A matching OS
+temporary path may be inspected and rejected, but exports remain unmanaged and
+under the user's control.
 
 The review is bound to the captured pull request snapshot, not kept current in
 the background. If the head or base changes, run `$hope:diff` again. A default
-temporary review creates no project cleanup work: close it when finished and let
-the operating system reclaim the temporary location. If you explicitly export
-a copy, you control its retention. A person or an AI may perform the merge; Hope
-is not part of that operation.
+temporary review creates no project cleanup work: close it when finished, and
+Hope can remove it on the first later default render after `eligibleAfter`.
+The operating system may reclaim it earlier or later. If you explicitly export
+a copy, you alone control its retention. A person or an AI may perform the
+merge; Hope is not part of that operation.
 
 ## Reduce cognitive debt without creating document debt
 

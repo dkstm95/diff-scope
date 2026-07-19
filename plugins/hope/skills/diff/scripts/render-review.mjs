@@ -24,6 +24,16 @@ import {
 export const MAX_CONTEXT_BYTES = 4 * 1024 * 1024;
 export const MAX_REVIEW_FILE_BYTES = MAX_REVIEW_MODEL_BYTES * 2;
 
+export function formatRenderPath(result) {
+  return `${result.file}\n`;
+}
+
+export function formatRetentionHandoff(result) {
+  return typeof result.eligibleAfter === "string"
+    ? `Hope retention: eligibleAfter=${result.eligibleAfter}\n`
+    : "";
+}
+
 function usage() {
   return `Usage:
   node render-review.mjs --input <review-model.json> --context <change-request.json> --validate-only
@@ -34,6 +44,7 @@ Options:
   --input    Transient ReviewModelV1 JSON generated in the active AI session.
   --context  Transient ChangeRequestV1 JSON produced by collect-change-request.mjs.
   --output   Export to a new HTML file. Existing paths are never overwritten.
+             Exported files are never removed by Hope retention cleanup.
   --validate-only
              Validate and rebind the review without rendering or removing inputs.
   --cleanup  Remove Hope-owned transient JSON after success, failure, or an
@@ -398,7 +409,8 @@ export async function main(
     throw primaryError;
   }
 
-  process.stdout.write(`${result.file}\n`);
+  process.stdout.write(formatRenderPath(result));
+  process.stderr.write(formatRetentionHandoff(result));
   return result;
 }
 

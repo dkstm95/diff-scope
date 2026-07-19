@@ -73,10 +73,33 @@ without rejecting an otherwise identical model.
 Final rendering removes them through the path-restricted `--cleanup` command;
 abandonment uses the cleanup-only form, and a blocked collection is never
 written. An abrupt process termination may leave a private temporary directory
-for the OS to reclaim. The only user-facing output is a private
-`hope-review.html`. Hope must not cache, index, commit, publish, upload, or attach
-that file automatically. Knowledge-promotion candidates require human review
-and a separate explicit change.
+for the OS to reclaim.
+
+The only user-facing output is a private `hope-review.html`. A default output
+contains a strict managed-temporary marker with an exact `eligibleAfter` time
+fixed seven days after creation. That embedded value is authoritative; touching
+the file or directory does not extend or shorten retention. Before scanning,
+Hope requires the POSIX temporary root to be either private and owned by the
+current user or a root/current-user-owned sticky shared directory. Before a
+later default render, Hope may remove an eligible sibling only when it is a
+direct child of the OS temporary directory at
+`hope-review-XXXXXX/hope-review.html`, and the directory name, marker,
+sole-file structure, regular-file link count,
+strict embedded time, and non-symlink checks all still match. On platforms
+exposing UID and POSIX mode information it also requires current-user ownership
+and private `0700`/`0600` permissions. It rechecks the same device and inode
+before
+unlinking, catches concurrent removal, and preserves every uncertain entry.
+This is a best-effort next-run cleanup, not a background timer, registry, cache,
+or database. A malicious process running under the same OS account is outside
+this boundary; Hope does not claim to defend one user from their own processes.
+
+An explicit export has no managed-temporary marker and can never qualify for
+retention deletion. A matching temporary-directory name may be inspected and
+rejected. Hope must not cache, index, commit, publish, upload, or attach any
+review automatically.
+Knowledge-promotion candidates require human review and a separate explicit
+change.
 
 The final HTML uses a fixed offline runtime. It must not execute model-authored
 HTML, CSS, JavaScript, SVG, URLs, or shell commands, and it must not embed raw
