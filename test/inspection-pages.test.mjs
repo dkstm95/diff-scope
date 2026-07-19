@@ -5,6 +5,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
@@ -24,6 +25,7 @@ const inspector = new URL(
   "../plugins/hope/skills/diff/scripts/inspect-change-request.mjs",
   import.meta.url,
 );
+const inspectorPath = fileURLToPath(inspector);
 
 test("does not echo malformed context source in JSON diagnostics", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "hope-inspector-parse-"));
@@ -187,7 +189,7 @@ test("CLI emits one compact complete page and continues only from its receipt", 
   await writeFile(contextPath, JSON.stringify(makeContext()), { mode: 0o600 });
 
   const first = await execFile(process.execPath, [
-    inspector.pathname,
+    inspectorPath,
     "--context",
     contextPath,
     "--summary",
@@ -199,7 +201,7 @@ test("CLI emits one compact complete page and continues only from its receipt", 
 
   await assert.rejects(
     execFile(process.execPath, [
-      inspector.pathname,
+      inspectorPath,
       "--context",
       contextPath,
       "--summary",
