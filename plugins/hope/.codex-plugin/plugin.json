@@ -1,6 +1,6 @@
 {
   "name": "hope",
-  "version": "0.3.1-alpha",
+  "version": "0.3.2-alpha",
   "description": "Understand any supported GitHub pull request before review or merge through a clear explanation, key code, risks, an interactive model, and a quiz.",
   "author": {
     "name": "SeungIl",

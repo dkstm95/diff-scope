@@ -7,7 +7,7 @@ const root = new URL("../", import.meta.url);
 const fromRoot = (relativePath) => new URL(relativePath, root);
 const read = async (relativePath) => await readFile(fromRoot(relativePath), "utf8");
 const readJson = async (relativePath) => JSON.parse(await read(relativePath));
-const currentVersion = "0.3.1-alpha";
+const currentVersion = "0.3.2-alpha";
 
 const requiredFiles = [
   ".agents/plugins/marketplace.json",
@@ -206,6 +206,7 @@ for (const document of [readme, readmeKo]) {
 assert.doesNotMatch(readme, /fixed interface uses English/u);
 assert.doesNotMatch(readmeKo, /고정 UI는 영어/u);
 
+assert.match(changelog, /^## 0\.3\.2-alpha /mu);
 assert.match(changelog, /^## 0\.3\.1-alpha /mu);
 assert.match(changelog, /^## 0\.3\.0-alpha /mu);
 assert.match(changelog, /^## 0\.2\.0-alpha /mu);

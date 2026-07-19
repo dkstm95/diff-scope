@@ -16,7 +16,7 @@ Hope는 크고 작은 pull request를 승인하거나 머지하기 전에 사람
 Hope는 현재 활성 Codex 구독 세션 안에서 동작한다. OpenAI API 키, 모델 설정,
 별도 서버, 중첩 모델 호출, 캐시, 데이터베이스가 필요 없다.
 
-> **Alpha:** `v0.3.1-alpha`는 GitHub pull request에 집중한다. Dogfooding
+> **Alpha:** `v0.3.2-alpha`는 GitHub pull request에 집중한다. Dogfooding
 > 결과에 따라 인터페이스와 schema가 바뀔 수 있다.
 
 ## 설치
@@ -31,7 +31,7 @@ Hope는 현재 활성 Codex 구독 세션 안에서 동작한다. OpenAI API 키
 태그가 지정된 marketplace에서 Hope를 설치한다.
 
 ```bash
-codex plugin marketplace add dkstm95/hope --ref v0.3.1-alpha
+codex plugin marketplace add dkstm95/hope --ref v0.3.2-alpha
 codex plugin add hope@hope
 ```
 

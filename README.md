@@ -17,7 +17,7 @@ an auto-scored understanding check.
 Hope runs inside your active Codex subscription session. It needs no OpenAI API
 key, model configuration, server, nested model call, cache, or database.
 
-> **Alpha:** `v0.3.1-alpha` focuses on GitHub pull requests. Interfaces and
+> **Alpha:** `v0.3.2-alpha` focuses on GitHub pull requests. Interfaces and
 > schemas may change as this workflow is dogfooded.
 
 ## Install
@@ -32,7 +32,7 @@ Requirements:
 Install Hope from its tagged marketplace:
 
 ```bash
-codex plugin marketplace add dkstm95/hope --ref v0.3.1-alpha
+codex plugin marketplace add dkstm95/hope --ref v0.3.2-alpha
 codex plugin add hope@hope
 ```
 

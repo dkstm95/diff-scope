@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2-alpha - 2026-07-19
 
 - Make the review scope explicit: Hope uses changed code hunks, the PR
   description, and commit titles, but not code outside those hunks,
