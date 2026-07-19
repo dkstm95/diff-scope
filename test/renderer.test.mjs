@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { lstat, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -747,17 +748,18 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /<html lang="ko">/u);
   assert.match(first, /<title>Hope 리뷰<\/title>/u);
   assert.match(first, /<h2 id="overview-heading">무엇이 바뀌었나<\/h2>/u);
+  assert.match(first, /<h2 id="review-focus-heading">확인할 점<\/h2>/u);
   assert.match(first, /<h2 id="workstream-heading">어떻게 동작하나<\/h2>/u);
-  assert.match(first, /<h2 id="review-focus-heading">위험, 결정, 확인할 질문<\/h2>/u);
-  assert.match(first, /<h2 id="literate-heading">핵심 코드 변경<\/h2>/u);
+  assert.match(first, /<h2 id="literate-heading">코드로 확인하기<\/h2>/u);
   assert.match(first, /<h2 id="microworld-heading">동작 실험<\/h2>/u);
-  assert.match(first, /<h2 id="quiz-heading">이해도 확인<\/h2>/u);
+  assert.match(first, /<h2 id="quiz-heading">이해 확인<\/h2>/u);
   assert.match(first, /<h2 id="details-heading">분석 세부 정보<\/h2>/u);
   assert.match(first, /class="technical-details"><summary>분석한 PR 버전과 세부 정보 보기<\/summary>/u);
-  assert.match(first, /"observed":"코드에서 확인"/u);
+  assert.match(first, /"observed":"변경 내용에서 확인"/u);
   assert.match(first, /"not-run":"실행 안 함"/u);
   assert.match(first, /"generated-or-lockfile":"생성\/잠금 파일"/u);
-  assert.match(first, /id="workstream-navigation"/);
+  assert.doesNotMatch(first, /id="workstream-navigation"/);
+  assert.match(first, /element\("details", undefined, "card disclosure-card workstream-card"\)/u);
   assert.match(first, /workstreamTarget/);
   assert.match(first, /return "workstream-card-" \+ id/u);
   assert.match(first, /synthesis-interactions/);
@@ -767,14 +769,18 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /PR 제목/);
   const header = first.slice(first.indexOf("<header>"), first.indexOf("</header>"));
   assert.match(header, /id="review-context"/u);
-  assert.doesNotMatch(header, /Base SHA|Merge-base SHA|Head SHA|Fingerprint|분석 식별값/u);
+  assert.doesNotMatch(header, /Base SHA|Merge-base SHA|Head SHA|Fingerprint|검증 ID/u);
+  const compactContextStart = first.indexOf("const compactValues = [");
+  const compactContext = first.slice(compactContextStart, first.indexOf("];", compactContextStart) + 2);
+  assert.match(compactContext, /ui\.context\.size/u);
+  assert.doesNotMatch(compactContext, /ui\.context\.(?:author|commits|files|changedLines)/u);
   const sectionOrder = [
     'id="overview"',
     'id="workstreams"',
     'id="review-focus"',
-    'id="literate-diff"',
     'id="microworld-section"',
     'id="quiz"',
+    'id="literate-diff"',
     'id="details"',
   ].map((marker) => first.indexOf(marker));
   assert.ok(sectionOrder.every((position) => position >= 0));
@@ -794,7 +800,29 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /correctOptionIds/);
   assert.match(first, /selected\.size === expected\.size/);
   assert.match(first, /candidate\.when\.find/);
-  assert.match(first, /이 기능은 이해를 돕기 위한 제한된 모델이며 프로젝트 코드를 실행하지 않습니다/u);
+  assert.match(first, /이 실험은 설명을 돕는 예시이며 프로젝트 코드를 실행하지 않습니다/u);
+  assert.match(first, /id="quiz-disclosure"/u);
+  assert.match(first, /id="scenario-status" class="sr-only" role="status" aria-live="polite"/u);
+  assert.match(first, /<th scope="col">경로<\/th>/u);
+  assert.match(first, /min-height: 44px/u);
+  assert.match(first, /\.workstream-card \{ scroll-margin-top: 76px; \}/u);
+  assert.match(first, /@media \(max-width: 900px\)[\s\S]*\.workstream-card \{ scroll-margin-top: 18px; \}/u);
+  assert.match(first, /\.table-wrap:focus-visible,[^}]*\.quiz-question:focus,[^}]*\.result:focus \{ outline: 3px solid var\(--accent\)/u);
+  assert.match(first, /\.control \{[^}]*flex: 1 1 190px;[^}]*min-width: 0;[^}]*max-width: 100%;/u);
+  assert.match(first, /\.control select \{ width: 100%; min-width: 0; max-width: 100%; \}/u);
+  assert.match(first, /\.grid > \*, \.card, details, section, fieldset, \.table-wrap \{ min-width: 0; max-width: 100%; \}/u);
+  assert.match(first, /fieldset \{ min-inline-size: 0;/u);
+  assert.match(first, /\.choice > span \{ min-width: 0; overflow-wrap: anywhere; \}/u);
+  assert.match(first, /\.table-wrap \{ width: 100%; max-width: 100%; overflow-x: auto;/u);
+  assert.match(first, /@media \(max-width: 400px\)[\s\S]*\.meta \{ grid-template-columns: 1fr; \}[\s\S]*\.compact-meta \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/u);
+  assert.match(first, /flow\.setAttribute\("role", "list"\)/u);
+  assert.match(first, /element\("span", String\(index \+ 1\), "flow-number"\)/u);
+  assert.doesNotMatch(first, /counter-reset: hope-step|\.visual-flow li::marker/u);
+  assert.match(first, /element\("fieldset", undefined, "quiz-question"\)/u);
+  assert.match(first, /"more":"배경과 변경 전후 자세히 보기","before":"변경 전","after":"변경 후"/u);
+  assert.match(first, /"before":"선택한 조건","after":"예상 동작","outcome":"결과"/u);
+  assert.doesNotMatch(first, /appendEvidence\(item, step\.evidenceIds\)/u);
+  assert.doesNotMatch(first, /appendEvidence\(fieldset, question\.evidenceIds\)/u);
   assert.doesNotMatch(first, /<\/script><script>alert\('unsafe'\)/);
   assert.match(first, /\\u003c\/script\\u003e\\u003cscript\\u003e/);
   assert.match(first, /\\u0026/);
@@ -803,6 +831,16 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.doesNotMatch(first, /\bfetch\s*\(/);
   assert.doesNotMatch(first, /XMLHttpRequest|WebSocket|EventSource|new\s+Function/);
   assert.doesNotMatch(first, /<script[^>]+src=|<link[^>]+href=|<img[^>]+src=/);
+
+  const csp = first.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)">/u)?.[1];
+  const style = first.match(/<style>([\s\S]*?)<\/style>/u)?.[1];
+  const data = first.match(/<script id="review-data" type="application\/json">([\s\S]*?)<\/script>/u)?.[1];
+  const runtime = first.match(/<script>([\s\S]*?)<\/script>\s*<\/body>/u)?.[1];
+  assert.ok(csp && style && data && runtime);
+  for (const body of [style, data, runtime]) {
+    const digest = createHash("sha256").update(body, "utf8").digest("base64");
+    assert.ok(csp.includes(`'sha256-${digest}'`));
+  }
 });
 
 test("renders the fixed interface in the selected language", async () => {
@@ -812,9 +850,24 @@ test("renders the fixed interface in the selected language", async () => {
   assert.match(html, /<html lang="en">/u);
   assert.match(html, /<title>Hope Review<\/title>/u);
   assert.match(html, /<h2 id="overview-heading">What changed<\/h2>/u);
+  assert.match(html, /<h2 id="review-focus-heading">What to verify<\/h2>/u);
+  assert.match(html, /<h2 id="workstream-heading">How it works<\/h2>/u);
   assert.match(html, /<h2 id="microworld-heading">Try the behavior<\/h2>/u);
-  assert.match(html, /<h2 id="quiz-heading">Check your understanding<\/h2>/u);
+  assert.match(html, /<h2 id="quiz-heading">Quiz<\/h2>/u);
+  assert.match(html, /<h2 id="literate-heading">Check the code<\/h2>/u);
   assert.match(html, /<h2 id="details-heading">Analysis details<\/h2>/u);
+});
+
+test("keeps maximum-length review text inside shrinkable layout containers", async () => {
+  const review = await fixture();
+  const unbroken = "A".repeat(4000);
+  review.authorQuestions[0].question = unbroken;
+  review.quiz.questions[0].prompt = unbroken;
+  review.quiz.questions[0].options[0].text = unbroken;
+  const html = renderReviewHtml(review);
+  assert.match(html, new RegExp(`"question":"${unbroken}"`, "u"));
+  assert.match(html, /overflow-wrap: anywhere/u);
+  assert.match(html, /min-inline-size: 0/u);
 });
 
 test("serializes selected excerpts as inert data and renders them only with textContent", async () => {

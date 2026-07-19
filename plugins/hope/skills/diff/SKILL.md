@@ -199,11 +199,27 @@ Apply these rules:
   demonstrates.
 - Explain observable before-to-after behavior and the causal path, not every
   changed line or commit.
+- Plan the human reading path before writing fields. Give each important idea
+  one primary location and remove semantic duplicates across the overview,
+  before/after entries, visuals, workstreams, synthesis, literate diff, and
+  microworld. Quiz repetition is allowed only for deliberate recall practice.
+- Give the reader a minimal causal model before asking for judgment: explain
+  what changed and how the main behavior flows, then present author questions
+  and material risks before experiments, quizzes, or code details.
+- Prefer three to five observable changes. Keep each paragraph to one main idea
+  and usually no more than two short sentences. For Korean, use one consistent
+  polite `-합니다` style.
+- When body coverage is partial, state the included and excluded file counts
+  near the top. Do not say Hope read the whole change, every file, or everything
+  without immediately qualifying what was excluded.
 - Separate decisions, tradeoffs, invariants, risks, unknowns, and verification
   limits. This alpha collects neither a checkout nor CI results, so verification
   status must be `not-run` or `unknown`; never claim `passed` or `failed`.
 - Use typed declarative visualizations only when they make the change easier to
-  understand. Never author raw Mermaid, HTML, CSS, JavaScript, SVG, or URLs.
+  understand. Prefer one visual and add a second only for a different
+  comprehension job. A visual must clarify or replace prose rather than repeat
+  the same before/after list. Never author raw Mermaid, HTML, CSS, JavaScript,
+  SVG, or URLs.
 - Write one global set of three to five quiz questions for the whole change, not
   one quiz per pass or workstream. Include at least one behavior prediction and
   one invariant or risk question. Bind every answer explanation to collected
@@ -211,9 +227,11 @@ Apply these rules:
 - Set the microworld to `null` unless adjustable scenarios materially improve
   understanding of the whole change. When useful, create at most one microworld
   and use only the bounded declarative controls and scenarios allowed by the
-  schema.
+  schema. Do not create it when a static decision table already teaches the
+  same cases.
 - Add concise questions for the author where intent, behavior, risk, or evidence
-  remains uncertain.
+  remains uncertain. Do not omit a question merely to reduce the visible count;
+  the renderer discloses questions progressively.
 - Suggest durable knowledge only when it is hard to reconstruct, likely to
   affect a future decision, still valid after merge, and suitable for the
   project's existing test, code comment, architecture document, or runbook.
@@ -223,7 +241,9 @@ Apply these rules:
   labels from the validated locale.
 - Prefer plain, user-facing wording. Keep transport, schema, and analysis terms
   such as pass, receipt, attestation, and workstream out of authored teaching
-  content unless the term itself is essential to understanding the code.
+  content unless the term itself is essential to understanding the code. Prefer
+  "PR version" to "snapshot", "changed code" to "patch", "reading group" to
+  "analysis pass", and "current PR" to "live PR" in ordinary teaching text.
 - Never add a cache, database, registry, `.hope/` archive, or project file.
 
 ## 5. Validate, correct, and render once

@@ -38,19 +38,27 @@ make the same model unreadable. These limits bound the internal
 model-to-renderer handoff independently of the smaller patch, summary, pass,
 and page budgets; they are not permission to expand any collection limit.
 
-The HTML presents information in human-review order:
+The HTML presents information in human-review order with progressive
+disclosure:
 
-1. the pull request title, a one-sentence explanation, and compact trust context;
-2. what changed, why it changed, and before/after behavior;
-3. fixed, declarative visual models;
-4. behavior flows and how they affect each other;
-5. must-hold conditions, risks, decisions, verification limits, and questions;
-6. a selective key-code walkthrough with bounded excerpts;
-7. an optional declarative interactive model;
-8. an auto-scored understanding check;
-9. optional candidates for an existing project source of truth; and
-10. collapsed analysis details containing exact object IDs, fingerprint,
-    coverage dimensions, the complete file map, and processing-unit metadata.
+1. the pull request title, a short explanation, four compact trust facts, and
+   any partial-coverage warning;
+2. the few observable changes and one useful visual, with background and
+   before/after detail collapsed;
+3. collapsed behavior flows and a collapsed cross-flow synthesis, so the
+   reader has a minimal causal model of the change;
+4. unresolved questions and material risks, followed by collapsed invariants,
+   decisions, and verification limits;
+5. an optional interactive model and a collapsed understanding check;
+6. a collapsed selective code walkthrough and optional project-knowledge
+   candidates; and
+7. collapsed analysis details containing exact object IDs, fingerprint,
+   coverage dimensions, the complete file map, and processing metadata.
+
+Evidence remains available, but repeated references are deduplicated and shown
+once per section or meaningful card rather than after every sentence and step.
+Questions that require human judgment are not discarded to hit a display count;
+the renderer keeps each question collapsed until the reader chooses it.
 
 `ReviewModelV1.locale` is explicitly `en` or `ko`. The generator uses that
 language for authored teaching content, and the renderer uses one fixed,
@@ -58,6 +66,37 @@ trusted dictionary for every visible label, status, feedback message, and ARIA
 description. Original pull-request titles, paths, commands, and evidence
 excerpts remain unchanged. Internal enum and transport names do not become
 user-interface vocabulary.
+
+## Human readability
+
+The review is a learning aid for a human with less working memory and code
+context than the generator. Completeness of the internal analysis does not
+justify exposing every internal note on the default page.
+
+- Give each important idea one primary teaching location. Do not restate the
+  same input change, size-handling rule, snapshot check, or output format in the
+  overview, visual, flow, synthesis, code walkthrough, and microworld.
+- Use repetition only where it has a learning purpose, such as recall in the
+  quiz. A visual should replace or clarify prose, not mirror the same
+  before/after list. A microworld should expose a decision the reader can vary,
+  not duplicate a decision table.
+- Prefer one visual and use a second only when it explains a different
+  relationship. Three visuals require three distinct comprehension jobs.
+- Use short sentences with one main idea. Prefer familiar user language and
+  define an unavoidable technical term at first use. Keep transport terms,
+  byte limits, object IDs, and processing mechanics in collapsed analysis
+  details unless they are the behavior under review.
+- Keep the authored tone consistent with the selected locale. Korean teaching
+  text uses the polite `-합니다` style instead of mixing narrative endings.
+- State partial coverage numerically and accurately. When any body is excluded,
+  never claim that Hope read "all", "the whole change", or "every file" without
+  immediately qualifying the statement.
+- Show author questions and material risks immediately after the overview and
+  behavior flows. The reader should first learn what changed and how it works,
+  but should not have to cross experiments, quizzes, or code details before
+  reaching the decisions that need human judgment. Supporting decisions,
+  invariants, code evidence, and analysis mechanics remain available through
+  disclosures instead of competing for initial attention.
 
 Passing the quiz does not prove complete understanding and is not a merge gate.
 A microworld models behavior; it never executes repository code.

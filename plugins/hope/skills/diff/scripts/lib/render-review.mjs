@@ -31,22 +31,23 @@ const REVIEW_STYLE = String.raw`:root {
 }
 * { box-sizing: border-box; }
 body { margin: 0; color: var(--ink); background: var(--paper); line-height: 1.62; }
-header, main, footer { width: min(1120px, calc(100% - 32px)); margin-inline: auto; }
-header { padding: 56px 0 26px; }
-header p { max-width: 78ch; }
-main { display: grid; gap: 22px; padding-bottom: 56px; }
-section { border: 1px solid var(--line); border-radius: 18px; padding: clamp(20px, 4vw, 36px); background: var(--panel); box-shadow: 0 12px 34px rgba(28, 37, 33, .055); }
+header, main, footer { width: min(1040px, calc(100% - 32px)); margin-inline: auto; }
+header { padding: 48px 0 24px; }
+header p { max-width: 68ch; }
+main { display: grid; gap: 16px; padding-bottom: 48px; }
+section { border: 1px solid var(--line); border-radius: 16px; padding: clamp(20px, 3vw, 32px); background: var(--panel); box-shadow: 0 10px 28px rgba(28, 37, 33, .05); scroll-margin-top: 76px; }
 h1, h2, h3, h4 { line-height: 1.24; }
 h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.7rem); letter-spacing: -.045em; }
 h2 { margin-top: 0; font-size: clamp(1.4rem, 3vw, 2rem); }
 h3 { margin-top: 28px; }
-p, li { max-width: 82ch; }
+h5 { font-size: 1rem; }
+p, li { max-width: 68ch; }
+h1, h2, h3, h4, h5, p, li, a, strong, summary, legend, label, dd, th, td { overflow-wrap: anywhere; }
 a { color: var(--accent); text-underline-offset: .18em; }
-.section-nav, .jump-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 auto 22px; }
-.section-nav { width: min(1120px, calc(100% - 32px)); }
-.section-nav a, .jump-nav a { border: 1px solid var(--line); border-radius: 999px; padding: 6px 11px; color: var(--accent); background: var(--panel); font-size: .88rem; font-weight: 750; text-decoration: none; }
-.section-nav a:hover, .jump-nav a:hover { border-color: var(--accent); }
-.workstream-card { scroll-margin-top: 18px; }
+.section-nav { display: flex; flex-wrap: nowrap; gap: 8px; width: min(1040px, calc(100% - 32px)); margin: 0 auto 16px; overflow-x: auto; padding-block: 8px; scrollbar-width: thin; }
+.section-nav a { display: inline-flex; flex: 0 0 auto; min-height: 44px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 8px 13px; color: var(--accent); background: var(--panel); font-size: .9rem; font-weight: 750; text-decoration: none; }
+.section-nav a:hover { border-color: var(--accent); }
+.workstream-card { scroll-margin-top: 76px; }
 .inline-links { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
 .inline-links .label { color: var(--muted); font-weight: 750; }
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
@@ -54,14 +55,15 @@ a { color: var(--accent); text-underline-offset: .18em; }
 .muted { color: var(--muted); }
 .notice { border-left: 4px solid var(--warning); border-radius: 8px; padding: 13px 15px; color: var(--warning); background: var(--warning-soft); }
 .grid { display: grid; gap: 16px; }
+.grid > *, .card, details, section, fieldset, .table-wrap { min-width: 0; max-width: 100%; }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
 .card > :first-child { margin-top: 0; }
 .card > :last-child { margin-bottom: 0; }
 .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 18px 0; }
-.meta dt { color: var(--muted); font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.meta dt { color: var(--muted); font-size: .875rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .meta dd { margin: 3px 0 0; overflow-wrap: anywhere; }
-.tag { display: inline-block; margin-right: 7px; border-radius: 999px; padding: 2px 9px; font-size: .78rem; font-weight: 800; text-transform: capitalize; background: var(--accent-soft); color: var(--accent); }
+.tag { display: inline-block; margin-right: 7px; border-radius: 999px; padding: 2px 9px; font-size: .875rem; font-weight: 800; text-transform: capitalize; background: var(--accent-soft); color: var(--accent); }
 .tag.declared { color: var(--declared); background: #e5edfb; }
 .tag.observed { color: var(--observed); background: #e3f2e9; }
 .tag.inferred { color: var(--inferred); background: #fff0ca; }
@@ -69,40 +71,45 @@ a { color: var(--accent); text-underline-offset: .18em; }
 .claim { margin-block: 12px; }
 .claim p { margin: 6px 0; }
 .evidence { margin-top: 10px; color: var(--muted); }
-.evidence summary { cursor: pointer; font-weight: 700; }
+.evidence summary { min-height: 44px; padding-block: 8px; cursor: pointer; font-weight: 700; }
 .evidence ul { margin-bottom: 0; }
 .excerpt { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f2f1eb; }
 .before-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .before-after h5 { margin: 0 0 8px; }
-.visual-flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; padding: 0; list-style: none; }
-.visual-flow li { flex: 1 1 180px; position: relative; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; }
-.visual-flow li:not(:last-child)::after { content: "→"; position: absolute; right: -12px; top: 50%; z-index: 1; color: var(--accent); font-weight: 900; }
-.table-wrap { overflow-x: auto; }
+.visual-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 0; list-style: none; }
+.visual-flow li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; }
+.flow-number { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); font-size: .82rem; font-weight: 800; }
+.flow-copy { min-width: 0; }
+.flow-copy p { margin: 6px 0 0; }
+.table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
 table { width: 100%; border-collapse: collapse; }
 th, td { border: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
 th { background: #f0efe8; }
+.decision-table { min-width: 36rem; }
 .flow { padding-left: 1.4rem; }
 .flow li { margin-block: 10px; }
-.file-map { font-size: .92rem; }
-.file-map code { word-break: break-all; }
+.file-map { min-width: 64rem; font-size: .92rem; }
+.file-map code { word-break: normal; overflow-wrap: anywhere; }
 .path-list { columns: 2 280px; }
 .path-list li { break-inside: avoid; margin-block: 5px; }
 .literate-change { border-left: 3px solid var(--accent); padding-left: 14px; margin-block: 18px; }
-fieldset { margin: 0 0 20px; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-legend { padding: 0 8px; font-weight: 760; }
-.choice { display: flex; gap: 10px; align-items: flex-start; margin-block: 9px; }
+fieldset { min-inline-size: 0; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+legend { max-width: 100%; padding: 0 8px; font-weight: 760; }
+.choice { display: flex; min-height: 44px; gap: 10px; align-items: flex-start; margin-block: 5px; padding: 9px 4px; cursor: pointer; }
 .choice input { margin-top: .38rem; }
-button, select { border: 1px solid var(--line); border-radius: 9px; padding: 10px 13px; color: var(--ink); background: #fff; font: inherit; }
+.choice > span { min-width: 0; overflow-wrap: anywhere; }
+button, select { min-height: 44px; max-width: 100%; border: 1px solid var(--muted); border-radius: 9px; padding: 10px 13px; color: var(--ink); background: #fff; font: inherit; }
 button { border-color: var(--accent); color: #fff; background: var(--accent); font-weight: 760; cursor: pointer; }
 button:hover { filter: brightness(.93); }
-button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid rgba(18,104,79,.3); outline-offset: 2px; }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible, .table-wrap:focus-visible, .quiz-question:focus, .result:focus { outline: 3px solid var(--accent); outline-offset: 3px; }
 .answer { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: #f0efe9; }
 .result { min-height: 1.6em; margin-top: 14px; font-weight: 760; }
 .correct { color: var(--success); }
 .incorrect { color: var(--danger); }
 .controls { display: flex; flex-wrap: wrap; gap: 14px; margin-block: 20px; }
-.control { display: grid; gap: 5px; min-width: 190px; }
+.control { display: grid; flex: 1 1 190px; min-width: 0; max-width: 100%; gap: 5px; }
 .control label { font-weight: 700; }
+.control select { width: 100%; min-width: 0; max-width: 100%; }
 .trace ol { padding-left: 1.4rem; }
 .outcome { border-top: 1px solid var(--line); padding-top: 12px; font-weight: 700; }
 .lesson { border-left: 4px solid var(--accent); padding: 12px 16px; background: var(--accent-soft); }
@@ -110,15 +117,44 @@ code { border-radius: 4px; padding: 2px 5px; background: #eeece4; font-family: u
 footer { padding: 0 0 40px; color: var(--muted); font-size: .9rem; }
 .compact-meta { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); margin-bottom: 0; }
 .compact-meta > div { border-top: 1px solid var(--line); padding-top: 10px; }
-.technical-details > summary { cursor: pointer; font-size: 1.15rem; font-weight: 800; }
+.secondary-details, .disclosure-card, .section-disclosure { margin-top: 18px; }
+.secondary-details > summary, .disclosure-card > summary, .section-disclosure > summary { min-height: 44px; cursor: pointer; font-weight: 800; }
+.workstream-card > details > summary { min-height: 44px; padding-block: 8px; cursor: pointer; }
+.secondary-details[open] > summary, .disclosure-card[open] > summary, .section-disclosure[open] > summary { margin-bottom: 16px; }
+.summary-title { display: block; color: var(--ink); font-size: 1.05rem; }
+.summary-copy { display: block; margin-top: 3px; color: var(--muted); font-size: .92rem; font-weight: 500; }
+.section-disclosure { border-top: 1px solid var(--line); padding-top: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.technical-details summary { min-height: 44px; padding-block: 8px; cursor: pointer; }
+.technical-details > summary { font-size: 1.15rem; font-weight: 800; }
 .technical-details[open] > summary { margin-bottom: 24px; }
 .technical-details .details-intro { margin-top: 0; }
 [hidden] { display: none !important; }
+@media (min-width: 901px) {
+  .section-nav { position: sticky; top: 0; z-index: 5; padding-block: 8px; background: var(--paper); }
+}
+@media (max-width: 900px) {
+  .grid.two { grid-template-columns: 1fr; }
+  .workstream-card { scroll-margin-top: 18px; }
+}
 @media (max-width: 640px) {
+  header, main, footer { width: min(100% - 20px, 1040px); }
   header { padding-top: 34px; }
-  section { border-radius: 12px; }
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.4rem; }
+  h3 { margin-top: 22px; }
+  section { border-radius: 12px; padding: 16px; scroll-margin-top: 18px; }
+  .card { padding: 14px; }
+  .section-nav { width: calc(100% - 20px); margin-bottom: 12px; }
   .before-after { grid-template-columns: 1fr; }
-  .visual-flow li:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -19px; }
+  .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .compact-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  th, td { padding: 8px; }
+}
+@media (max-width: 400px) {
+  .meta { grid-template-columns: 1fr; }
+  .compact-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .visual-flow { grid-template-columns: 1fr; }
 }`;
 
 const REVIEW_UI = {
@@ -127,11 +163,11 @@ const REVIEW_UI = {
     reviewSections: "Review sections",
     nav: {
       summary: "Summary",
-      behavior: "How it works",
-      focus: "Risks & questions",
-      code: "Key code",
-      try: "Try it",
-      quiz: "Check understanding",
+      behavior: "Flow",
+      focus: "Checks",
+      code: "Code & evidence",
+      try: "Explore",
+      quiz: "Quiz",
       details: "Details",
     },
     context: {
@@ -141,14 +177,16 @@ const REVIEW_UI = {
       commits: "Commits",
       files: "Files",
       changedLines: "Changed lines",
+      size: "Size",
+      sizeValue: "{files} files · {lines} lines",
       coverage: "Analysis scope",
-      partialNotice: "{count} changed file(s) could not be inspected in full. The explanation uses only the available content; see analysis details for the reasons.",
+      partialNotice: "{excluded} of {total} file(s) could not be inspected. This review uses the {included} inspected file(s) only.",
       attentionNotice: "Some review inputs need attention. See analysis details before relying on the explanation.",
     },
     coverage: { complete: "Complete", partial: "Some content excluded", blocked: "Unable to analyze" },
     stage: { draft: "Draft", ready: "Ready for review", historical: "Merged or closed", abandoned: "Closed" },
     state: { open: "Open", closed: "Closed", merged: "Merged" },
-    basis: { declared: "Author context", observed: "Confirmed in code", inferred: "Hope interpretation", unknown: "Needs confirmation" },
+    basis: { declared: "Author context", observed: "Confirmed in the change", inferred: "Inferred from evidence", unknown: "Needs confirmation" },
     evidenceSource: { "pr-description": "PR description", commit: "Commit", code: "Code", test: "Test" },
     fileStatus: { added: "Added", modified: "Modified", deleted: "Deleted", renamed: "Renamed", copied: "Copied", "type-changed": "Type changed" },
     bodyState: {
@@ -195,19 +233,21 @@ const REVIEW_UI = {
       noBackground: "No additional reason was needed to explain this change.",
       observableHeading: "Visible changes",
       beforeAfterHeading: "Before and after",
+      more: "More context and before/after details",
       before: "Before",
       after: "After",
       why: "Why",
     },
-    visual: { eyebrow: "Visual explanation", heading: "Visual model", case: "Case" },
+    visual: { eyebrow: "Visual explanation", heading: "At a glance", case: "Case" },
     behavior: {
       eyebrow: "Behavior",
       heading: "How it works",
-      help: "Follow the change through its main behavior flows.",
+      help: "Open only the flow you want to inspect.",
       navigation: "Change flows",
       relatedPaths: "Related changed files",
       connectionsEyebrow: "Connections",
       connectionsHeading: "How the flows affect each other",
+      connectionsSummary: "How these flows connect",
       noConnections: "No interaction between change flows was needed for this change.",
       connects: "Connects",
       relatedFlows: "Related change flows",
@@ -215,41 +255,44 @@ const REVIEW_UI = {
     },
     focus: {
       eyebrow: "Review focus",
-      heading: "Risks, decisions, and questions",
+      heading: "What to verify",
       invariants: "Must-hold conditions",
-      risks: "Risks",
-      decisions: "Decisions and trade-offs",
+      risks: "Things to watch",
+      decisions: "Key design decisions",
       noDecisions: "No decision was stated strongly enough to preserve here.",
       tradeoff: "Trade-off",
-      verification: "Checks",
+      verification: "Check status",
       questions: "Questions that need an answer",
+      more: "Show conditions, design decisions, and check status",
       noQuestions: "No unresolved questions were identified from the available evidence.",
     },
     code: {
       eyebrow: "Code evidence",
-      heading: "Key code changes",
-      help: "A focused walkthrough of representative changed files. The full raw patch is not embedded.",
+      heading: "Check the code",
+      help: "Open a file only when you need implementation details. The full raw patch is not embedded.",
     },
     microworld: {
       eyebrow: "Explore",
       heading: "Try the behavior",
-      notice: "This is a limited explanatory model. It does not run project code.",
+      notice: "This is an explanation aid, not running project code.",
       noScenario: "No scenario matches this combination.",
-      before: "Before the change",
-      after: "After the change",
+      before: "Selected conditions",
+      after: "Expected behavior",
       outcome: "Outcome",
       regionLabel: "Selected scenario",
     },
     quiz: {
       eyebrow: "Check yourself",
-      heading: "Check your understanding",
+      heading: "Quiz",
       help: "Use these questions to find gaps in your understanding. The score is not merge approval.",
+      open: "Answer {count} questions",
       submit: "Check answers and show explanations",
       correct: "Correct.",
       review: "Review this answer.",
       pass: "Passed",
       below: "Below the target",
       resultSuffix: "This score helps locate gaps; it does not prove complete understanding.",
+      result: "{correct} of {total} correct · {percent}%. {suffix}",
       correctCount: "correct",
     },
     projectKnowledge: {
@@ -278,16 +321,16 @@ const REVIEW_UI = {
       fingerprint: "Fingerprint",
       scopeNotes: "Scope notes",
       scopeStatus: "Collection status",
-      changedFileMap: "Changed file map",
+      changedFileMap: "Changed file list",
       path: "Path",
       previousPath: "Previous path",
       status: "Status",
       lines: "Lines",
       body: "Content",
-      processingUnit: "Processing unit",
+      processingUnit: "Reading group",
       relatedFlows: "Related change flows",
-      processedUnits: "Analysis processing units",
-      processingHelp: "These units only keep large changes inspectable. They are not the behavior flows used in the explanation.",
+      processedUnits: "Reading groups",
+      processingHelp: "Hope split this change into these groups so it could read it without truncation. They are not product behavior flows.",
       unitLines: "changed lines",
       unitBytes: "bytes",
       unitPages: "inspection pages",
@@ -303,12 +346,12 @@ const REVIEW_UI = {
     reviewSections: "리뷰 섹션",
     nav: {
       summary: "요약",
-      behavior: "동작 흐름",
-      focus: "위험과 질문",
-      code: "핵심 코드",
-      try: "동작 실험",
-      quiz: "이해 확인",
-      details: "세부 정보",
+      behavior: "동작",
+      focus: "확인",
+      code: "코드·근거",
+      try: "실험",
+      quiz: "퀴즈",
+      details: "세부",
     },
     context: {
       pr: "PR",
@@ -317,14 +360,16 @@ const REVIEW_UI = {
       commits: "커밋",
       files: "파일",
       changedLines: "변경 줄",
+      size: "규모",
+      sizeValue: "파일 {files}개 · {lines}줄",
       coverage: "분석 범위",
-      partialNotice: "변경 파일 {count}개의 내용을 전부 확인하지 못했습니다. 설명은 확인 가능한 내용만 사용하며, 이유는 분석 세부 정보에서 볼 수 있습니다.",
+      partialNotice: "전체 {total}개 중 {excluded}개 파일은 코드 내용을 확인하지 못했습니다. 이 리뷰는 확인한 {included}개 파일만 근거로 작성했습니다.",
       attentionNotice: "일부 리뷰 입력을 확인해야 합니다. 설명을 신뢰하기 전에 분석 세부 정보를 살펴보세요.",
     },
     coverage: { complete: "전체 분석", partial: "일부 제외", blocked: "분석 불가" },
     stage: { draft: "초안", ready: "리뷰 준비됨", historical: "머지 또는 종료됨", abandoned: "종료됨" },
     state: { open: "열림", closed: "닫힘", merged: "머지됨" },
-    basis: { declared: "작성자 설명", observed: "코드에서 확인", inferred: "Hope의 해석", unknown: "확인 필요" },
+    basis: { declared: "작성자 설명", observed: "변경 내용에서 확인", inferred: "근거로 추정", unknown: "확인 필요" },
     evidenceSource: { "pr-description": "PR 설명", commit: "커밋", code: "코드", test: "테스트" },
     fileStatus: { added: "추가", modified: "수정", deleted: "삭제", renamed: "이름 변경", copied: "복사", "type-changed": "형식 변경" },
     bodyState: {
@@ -371,19 +416,21 @@ const REVIEW_UI = {
       noBackground: "이 변경을 설명하는 데 추가 배경은 필요하지 않습니다.",
       observableHeading: "눈에 보이는 변화",
       beforeAfterHeading: "변경 전과 후",
+      more: "배경과 변경 전후 자세히 보기",
       before: "변경 전",
       after: "변경 후",
       why: "이유",
     },
-    visual: { eyebrow: "시각적 설명", heading: "한눈에 보는 동작", case: "상황" },
+    visual: { eyebrow: "시각적 설명", heading: "한눈에 보기", case: "상황" },
     behavior: {
       eyebrow: "동작",
       heading: "어떻게 동작하나",
-      help: "주요 동작 흐름을 따라가며 변경을 이해합니다.",
+      help: "궁금한 흐름만 펼쳐서 확인하세요.",
       navigation: "변경 흐름",
       relatedPaths: "관련 변경 파일",
       connectionsEyebrow: "연결 관계",
       connectionsHeading: "각 흐름이 서로 미치는 영향",
+      connectionsSummary: "흐름 사이의 연결 보기",
       noConnections: "이 변경에서는 흐름 사이의 별도 상호작용이 필요하지 않았습니다.",
       connects: "연결된 흐름",
       relatedFlows: "관련 변경 흐름",
@@ -391,41 +438,44 @@ const REVIEW_UI = {
     },
     focus: {
       eyebrow: "리뷰할 내용",
-      heading: "위험, 결정, 확인할 질문",
+      heading: "확인할 점",
       invariants: "반드시 지켜야 할 조건",
-      risks: "위험",
-      decisions: "결정과 고려한 대안",
+      risks: "주의할 점",
+      decisions: "주요 설계 결정",
       noDecisions: "여기에 남길 만큼 명확한 결정은 확인되지 않았습니다.",
       tradeoff: "감수한 점",
-      verification: "확인 결과",
+      verification: "확인 상태",
       questions: "확인이 필요한 질문",
+      more: "조건, 설계 결정, 확인 상태 보기",
       noQuestions: "현재 근거에서는 추가로 확인할 질문이 발견되지 않았습니다.",
     },
     code: {
       eyebrow: "코드 근거",
-      heading: "핵심 코드 변경",
-      help: "대표적인 변경 파일을 따라가며 핵심을 설명합니다. 전체 원본 diff는 포함하지 않습니다.",
+      heading: "코드로 확인하기",
+      help: "구현이 궁금한 파일만 펼쳐보세요. 전체 변경 코드는 포함하지 않습니다.",
     },
     microworld: {
       eyebrow: "직접 살펴보기",
       heading: "동작 실험",
-      notice: "이 기능은 이해를 돕기 위한 제한된 모델이며 프로젝트 코드를 실행하지 않습니다.",
+      notice: "이 실험은 설명을 돕는 예시이며 프로젝트 코드를 실행하지 않습니다.",
       noScenario: "이 조합에 맞는 시나리오가 없습니다.",
-      before: "변경 전",
-      after: "변경 후",
+      before: "선택한 조건",
+      after: "예상 동작",
       outcome: "결과",
       regionLabel: "선택한 시나리오",
     },
     quiz: {
       eyebrow: "스스로 확인하기",
-      heading: "이해도 확인",
+      heading: "이해 확인",
       help: "질문을 통해 이해가 부족한 부분을 찾습니다. 점수는 머지 승인을 의미하지 않습니다.",
+      open: "{count}개 질문 풀기",
       submit: "정답과 설명 확인",
       correct: "맞았습니다.",
       review: "이 답을 다시 살펴보세요.",
       pass: "기준 통과",
       below: "기준 미달",
       resultSuffix: "이 점수는 이해가 부족한 지점을 찾는 데만 사용되며 완전한 이해를 증명하지 않습니다.",
+      result: "{total}개 중 {correct}개 정답 · {percent}%. {suffix}",
       correctCount: "개 정답",
     },
     projectKnowledge: {
@@ -449,21 +499,21 @@ const REVIEW_UI = {
       inspectedBodies: "내용을 확인한 파일",
       explainableLines: "내용을 확인한 변경 줄",
       processingUnits: "분석 처리 단위",
-      inspectionPages: "검사 페이지",
+      inspectionPages: "읽은 페이지",
       selectedWalkthrough: "핵심 코드에서 다룬 파일",
-      fingerprint: "분석 식별값",
+      fingerprint: "검증 ID",
       scopeNotes: "분석 범위 안내",
       scopeStatus: "수집 상태",
-      changedFileMap: "변경 파일 전체 목록",
+      changedFileMap: "변경 파일 목록",
       path: "경로",
       previousPath: "이전 경로",
       status: "상태",
       lines: "변경 줄",
       body: "내용",
-      processingUnit: "처리 단위",
+      processingUnit: "읽기 묶음",
       relatedFlows: "관련 변경 흐름",
-      processedUnits: "분석 처리 단위",
-      processingHelp: "큰 변경을 빠짐없이 살펴보기 위해 나눈 기술적 단위입니다. 설명에 쓰는 동작 흐름과는 다릅니다.",
+      processedUnits: "나눠 읽은 묶음",
+      processingHelp: "변경 내용이 잘리지 않도록 Hope가 나눠 읽은 묶음입니다. 제품의 동작 흐름과는 다릅니다.",
       unitLines: "변경 줄",
       unitBytes: "바이트",
       unitPages: "검사 페이지",
@@ -574,11 +624,12 @@ function evidenceLabel(entry) {
 }
 
 function appendEvidence(parent, evidenceIds) {
-  if (evidenceIds.length === 0) return;
+  const uniqueIds = Array.from(new Set(evidenceIds));
+  if (uniqueIds.length === 0) return;
   const details = element("details", undefined, "evidence");
-  details.append(element("summary", ui.evidence + " (" + String(evidenceIds.length) + ")"));
+  details.append(element("summary", ui.evidence + " (" + String(uniqueIds.length) + ")"));
   const list = element("ul");
-  evidenceIds.forEach(function (evidenceId) {
+  uniqueIds.forEach(function (evidenceId) {
     const entry = evidenceById.get(evidenceId);
     const item = element("li");
     item.append(element("span", evidenceLabel(entry)));
@@ -589,32 +640,10 @@ function appendEvidence(parent, evidenceIds) {
   parent.append(details);
 }
 
-function relatedWorkstreamIds(evidenceIds) {
-  const ids = new Set();
-  evidenceIds.forEach(function (evidenceId) {
-    const path = evidenceById.get(evidenceId).path;
-    if (path === null) return;
-    (workstreamIdsByPath.get(path) || []).forEach(function (workstreamId) { ids.add(workstreamId); });
-  });
-  return Array.from(ids);
-}
-
-function appendWorkstreamScope(parent, evidenceIds) {
-  const ids = relatedWorkstreamIds(evidenceIds);
-  if (ids.length === 0) return;
-  const scope = element("p", undefined, "inline-links");
-  scope.append(element("span", ui.behavior.relatedFlows + ":", "label"));
-  appendInlineValues(scope, ids, function (id) {
-    return internalLink(workstreamById.get(id).title, workstreamTarget(id));
-  }, ui.behavior.none);
-  parent.append(scope);
-}
-
 function renderClaim(value) {
   const article = element("article", undefined, "claim");
   article.append(element("span", mapped("basis", value.basis), "tag " + value.basis));
   article.append(element("p", value.text));
-  appendEvidence(article, value.evidenceIds);
   return article;
 }
 
@@ -622,16 +651,12 @@ function renderReviewContext() {
   const change = review.changeRequest;
   document.getElementById("review-title").textContent = change.title;
   document.getElementById("review-lede").textContent = review.overview.summary.text;
-  appendEvidence(document.getElementById("review-lede-evidence"), review.overview.summary.evidenceIds);
   document.title = change.title + " · Hope";
 
   const compactValues = [
     [ui.context.pr, change.repository + " #" + change.id],
-    [ui.context.author, change.author],
     [ui.context.stage, mapped("stage", change.reviewStage)],
-    [ui.context.commits, String(change.commitCount)],
-    [ui.context.files, String(change.coverage.representedFiles)],
-    [ui.context.changedLines, String(change.coverage.changedLines)],
+    [ui.context.size, format(ui.context.sizeValue, { files: change.coverage.representedFiles, lines: change.coverage.changedLines })],
     [ui.context.coverage, mapped("coverage", change.coverage.status)],
   ];
   appendMetadata(document.getElementById("review-context"), compactValues);
@@ -641,7 +666,11 @@ function renderReviewContext() {
     const warning = document.getElementById("scope-summary-warning");
     warning.hidden = false;
     warning.textContent = excludedFileCount > 0
-      ? format(ui.context.partialNotice, { count: excludedFileCount })
+      ? format(ui.context.partialNotice, {
+          total: change.coverage.representedFiles,
+          excluded: excludedFileCount,
+          included: change.coverage.includedBodies,
+        })
       : ui.context.attentionNotice;
   }
 }
@@ -685,7 +714,8 @@ function renderTechnicalDetails() {
   const fileBody = document.getElementById("file-map-body");
   change.files.forEach(function (file) {
     const row = element("tr");
-    const pathCell = element("td");
+    const pathCell = element("th");
+    pathCell.setAttribute("scope", "row");
     pathCell.append(element("code", file.path));
     const previousCell = element("td");
     if (file.previousPath === null) previousCell.append(document.createTextNode("—"));
@@ -732,9 +762,15 @@ function renderOverview() {
     const after = element("div", undefined, "card"); after.append(element("h5", ui.overview.after), element("p", entry.after));
     panels.append(before, after);
     article.append(panels, element("p", ui.overview.why + ": " + entry.why, "muted"));
-    appendEvidence(article, entry.evidenceIds);
     comparisons.append(article);
   });
+  appendEvidence(document.getElementById("overview-evidence"), [
+    ...review.overview.summary.evidenceIds,
+    ...review.background.flatMap(function (claim) { return claim.evidenceIds; }),
+    ...review.overview.observableChanges.flatMap(function (claim) { return claim.evidenceIds; }),
+    ...review.overview.beforeAfter.flatMap(function (entry) { return entry.evidenceIds; }),
+    ...review.visuals.flatMap(function (visual) { return visual.evidenceIds; }),
+  ]);
 }
 
 function renderVisuals() {
@@ -758,20 +794,24 @@ function renderVisuals() {
       });
     } else if (visual.kind === "flow") {
       const flow = element("ol", undefined, "visual-flow");
-      visual.steps.forEach(function (step) {
-        const item = element("li"); item.append(element("strong", step.label), element("p", step.detail)); flow.append(item);
+      flow.setAttribute("role", "list");
+      visual.steps.forEach(function (step, index) {
+        const item = element("li");
+        const copy = element("div", undefined, "flow-copy");
+        copy.append(element("strong", step.label), element("p", step.detail));
+        item.append(element("span", String(index + 1), "flow-number"), copy);
+        flow.append(item);
       });
       article.append(flow);
     } else {
-      const wrapper = element("div", undefined, "table-wrap");
-      const table = element("table");
-      const head = element("thead"); const headRow = element("tr"); headRow.append(element("th", ui.visual.case));
-      visual.columns.forEach(function (column) { headRow.append(element("th", column)); }); head.append(headRow); table.append(head);
+      const wrapper = element("div", undefined, "table-wrap"); wrapper.tabIndex = 0; wrapper.setAttribute("role", "region"); wrapper.setAttribute("aria-label", visual.title);
+      const table = element("table", undefined, "decision-table");
+      const head = element("thead"); const headRow = element("tr"); const caseHeading = element("th", ui.visual.case); caseHeading.setAttribute("scope", "col"); headRow.append(caseHeading);
+      visual.columns.forEach(function (column) { const columnHeading = element("th", column); columnHeading.setAttribute("scope", "col"); headRow.append(columnHeading); }); head.append(headRow); table.append(head);
       const body = element("tbody");
-      visual.rows.forEach(function (row) { const tableRow = element("tr"); tableRow.append(element("th", row.label)); row.cells.forEach(function (cell) { tableRow.append(element("td", cell)); }); body.append(tableRow); });
+      visual.rows.forEach(function (row) { const tableRow = element("tr"); const rowHeading = element("th", row.label); rowHeading.setAttribute("scope", "row"); tableRow.append(rowHeading); row.cells.forEach(function (cell) { tableRow.append(element("td", cell)); }); body.append(tableRow); });
       table.append(body); wrapper.append(table); article.append(wrapper);
     }
-    appendEvidence(article, visual.evidenceIds);
     content.append(article);
   });
   section.hidden = false;
@@ -779,13 +819,12 @@ function renderVisuals() {
 
 function renderWorkstreams() {
   const content = document.getElementById("workstream-content");
-  const navigation = document.getElementById("workstream-navigation");
   review.workstreams.forEach(function (workstream) {
-    navigation.append(internalLink(workstream.title, workstreamTarget(workstream.id)));
-    const article = element("article", undefined, "card workstream-card");
+    const article = element("details", undefined, "card disclosure-card workstream-card");
     article.id = workstreamTarget(workstream.id);
-    heading(article, 3, workstream.title);
-    article.append(element("p", workstream.summary));
+    const summary = element("summary");
+    summary.append(element("span", workstream.title, "summary-title"), element("span", workstream.summary, "summary-copy"));
+    article.append(summary);
     const paths = element("details");
     paths.append(element("summary", ui.behavior.relatedPaths + " (" + String(workstream.paths.length) + ")"));
     const pathList = element("ul", undefined, "path-list");
@@ -794,9 +833,14 @@ function renderWorkstreams() {
     article.append(paths);
     const list = element("ol", undefined, "flow");
     workstream.steps.forEach(function (step) {
-      const item = element("li"); item.append(element("span", mapped("basis", step.basis), "tag " + step.basis), element("strong", step.component + ": "), document.createTextNode(step.behavior)); appendEvidence(item, step.evidenceIds); list.append(item);
+      const item = element("li"); item.append(element("span", mapped("basis", step.basis), "tag " + step.basis), element("strong", step.component + ": "), document.createTextNode(step.behavior)); list.append(item);
     });
-    article.append(list); appendEvidence(article, workstream.evidenceIds); content.append(article);
+    article.append(list);
+    appendEvidence(article, [
+      ...workstream.evidenceIds,
+      ...workstream.steps.flatMap(function (step) { return step.evidenceIds; }),
+    ]);
+    content.append(article);
   });
 }
 
@@ -804,8 +848,13 @@ function renderSynthesis() {
   const summary = document.getElementById("synthesis-summary");
   summary.append(renderClaim(review.synthesis.summary));
   const interactions = document.getElementById("synthesis-interactions");
+  const evidenceIds = [
+    ...review.synthesis.summary.evidenceIds,
+    ...review.synthesis.interactions.flatMap(function (interaction) { return interaction.evidenceIds; }),
+  ];
   if (review.synthesis.interactions.length === 0) {
     interactions.append(element("p", ui.behavior.noConnections, "muted"));
+    appendEvidence(document.getElementById("synthesis-evidence"), evidenceIds);
     return;
   }
   review.synthesis.interactions.forEach(function (interaction) {
@@ -818,19 +867,22 @@ function renderSynthesis() {
       return internalLink(workstreamById.get(workstreamId).title, workstreamTarget(workstreamId));
     }, ui.behavior.none);
     card.append(connected);
-    appendEvidence(card, interaction.evidenceIds);
     interactions.append(card);
   });
+  appendEvidence(document.getElementById("synthesis-evidence"), evidenceIds);
 }
 
 function renderLiterateDiff() {
   const content = document.getElementById("literate-content");
   review.literateDiff.forEach(function (entry) {
-    const article = element("article", undefined, "card");
-    const title = element("h3"); title.append(element("code", entry.path)); article.append(title, element("p", entry.role, "muted"));
+    const article = element("details", undefined, "card disclosure-card");
+    const summary = element("summary");
+    const title = element("span", undefined, "summary-title"); title.append(element("code", entry.path));
+    summary.append(title, element("span", entry.role, "summary-copy")); article.append(summary);
     entry.changes.forEach(function (change) {
-      const block = element("div", undefined, "literate-change"); heading(block, 4, change.headline); block.append(element("p", change.explanation)); appendEvidence(block, change.evidenceIds); article.append(block);
+      const block = element("div", undefined, "literate-change"); heading(block, 4, change.headline); block.append(element("p", change.explanation)); article.append(block);
     });
+    appendEvidence(article, entry.changes.flatMap(function (change) { return change.evidenceIds; }));
     content.append(article);
   });
 }
@@ -842,39 +894,67 @@ function renderSafety() {
   const decisions = document.getElementById("decision-content");
   if (review.decisions.length === 0) decisions.append(element("p", ui.focus.noDecisions, "muted"));
   review.decisions.forEach(function (entry) {
-    const card = element("article", undefined, "card"); card.append(element("span", mapped("basis", entry.basis), "tag " + entry.basis)); heading(card, 4, entry.decision); card.append(element("p", entry.rationale), element("p", ui.focus.tradeoff + ": " + entry.tradeoff, "muted")); appendEvidence(card, entry.evidenceIds); decisions.append(card);
+    const card = element("article", undefined, "card"); card.append(element("span", mapped("basis", entry.basis), "tag " + entry.basis)); heading(card, 4, entry.decision); card.append(element("p", entry.rationale), element("p", ui.focus.tradeoff + ": " + entry.tradeoff, "muted")); decisions.append(card);
   });
   const verification = document.getElementById("verification-content");
-  review.verification.forEach(function (entry) { const item = element("li"); item.append(element("span", mapped("verificationStatus", entry.status), "tag"), element("code", entry.command), document.createTextNode(" — " + entry.result)); appendEvidence(item, entry.evidenceIds); verification.append(item); });
+  review.verification.forEach(function (entry) { const item = element("li"); item.append(element("span", mapped("verificationStatus", entry.status), "tag"), element("code", entry.command), document.createTextNode(" — " + entry.result)); verification.append(item); });
 }
 
 function renderAuthorQuestions() {
   const content = document.getElementById("question-content");
-  if (review.authorQuestions.length === 0) { content.append(element("p", ui.focus.noQuestions, "muted")); return; }
-  review.authorQuestions.forEach(function (entry) { const card = element("article", undefined, "card"); heading(card, 3, entry.question); card.append(element("p", entry.why)); appendEvidence(card, entry.evidenceIds); content.append(card); });
+  if (review.authorQuestions.length === 0) content.append(element("p", ui.focus.noQuestions, "muted"));
+  review.authorQuestions.forEach(function (entry) {
+    const card = element("details", undefined, "card disclosure-card");
+    card.append(element("summary", entry.question), element("p", entry.why));
+    content.append(card);
+  });
+  appendEvidence(document.getElementById("focus-evidence"), [
+    ...review.invariants.flatMap(function (entry) { return entry.evidenceIds; }),
+    ...review.risks.flatMap(function (entry) { return entry.evidenceIds; }),
+    ...review.decisions.flatMap(function (entry) { return entry.evidenceIds; }),
+    ...review.verification.flatMap(function (entry) { return entry.evidenceIds; }),
+    ...review.authorQuestions.flatMap(function (entry) { return entry.evidenceIds; }),
+  ]);
 }
 
 function renderQuiz() {
   const form = document.getElementById("quiz-form");
   const views = [];
+  document.getElementById("quiz-open").textContent = format(ui.quiz.open, { count: review.quiz.questions.length });
   review.quiz.questions.forEach(function (question, index) {
-    const fieldset = element("fieldset"); fieldset.append(element("legend", String(index + 1) + ". " + question.prompt), element("span", mapped("quizCategory", question.category), "tag"));
+    const fieldset = element("fieldset", undefined, "quiz-question");
+    fieldset.tabIndex = -1;
+    fieldset.append(element("legend", String(index + 1) + ". " + question.prompt), element("span", mapped("quizCategory", question.category), "tag"));
     const inputs = [];
     question.options.forEach(function (option) {
       const label = element("label", undefined, "choice"); const input = element("input"); input.type = question.type === "single" ? "radio" : "checkbox"; input.name = "question-" + question.id; input.value = option.id; input.id = "question-" + question.id + "-" + option.id; label.setAttribute("for", input.id); label.append(input, element("span", option.text)); fieldset.append(label); inputs.push(input);
     });
-    const feedback = element("p", undefined, "answer"); feedback.hidden = true; fieldset.append(feedback); appendWorkstreamScope(fieldset, question.evidenceIds); appendEvidence(fieldset, question.evidenceIds); form.append(fieldset); views.push({ question: question, inputs: inputs, feedback: feedback });
+    const feedback = element("p", undefined, "answer");
+    feedback.id = "question-" + question.id + "-feedback";
+    feedback.hidden = true;
+    fieldset.setAttribute("aria-describedby", feedback.id);
+    fieldset.append(feedback);
+    form.append(fieldset);
+    views.push({ question: question, inputs: inputs, feedback: feedback, fieldset: fieldset });
   });
   const button = element("button", ui.quiz.submit); button.type = "submit"; form.append(button);
+  appendEvidence(document.getElementById("quiz-evidence"), review.quiz.questions.flatMap(function (question) { return question.evidenceIds; }));
   form.addEventListener("submit", function (event) {
-    event.preventDefault(); let correctCount = 0;
+    event.preventDefault(); let correctCount = 0; let firstIncorrect = null;
     views.forEach(function (view) {
       const selected = new Set(view.inputs.filter(function (input) { return input.checked; }).map(function (input) { return input.value; }));
       const expected = new Set(view.question.correctOptionIds);
       const correct = selected.size === expected.size && Array.from(expected).every(function (optionId) { return selected.has(optionId); });
-      if (correct) correctCount += 1; view.feedback.hidden = false; view.feedback.className = "answer " + (correct ? "correct" : "incorrect"); view.feedback.textContent = (correct ? ui.quiz.correct + " " : ui.quiz.review + " ") + view.question.explanation;
+      if (correct) correctCount += 1;
+      else if (firstIncorrect === null) firstIncorrect = view.fieldset;
+      view.feedback.hidden = false; view.feedback.className = "answer " + (correct ? "correct" : "incorrect"); view.feedback.textContent = (correct ? ui.quiz.correct + " " : ui.quiz.review + " ") + view.question.explanation;
     });
-    const percent = Math.round((correctCount / views.length) * 100); const passed = percent >= review.quiz.passPercent; const result = document.getElementById("quiz-result"); result.className = "result " + (passed ? "correct" : "incorrect"); result.textContent = String(correctCount) + "/" + String(views.length) + " " + ui.quiz.correctCount + " · " + String(percent) + "% · " + (passed ? ui.quiz.pass : ui.quiz.below) + ". " + ui.quiz.resultSuffix; result.focus();
+    const percent = Math.round((correctCount / views.length) * 100);
+    const result = document.getElementById("quiz-result");
+    result.className = "result";
+    result.textContent = format(ui.quiz.result, { correct: correctCount, total: views.length, percent: percent, suffix: ui.quiz.resultSuffix });
+    if (firstIncorrect === null) result.focus();
+    else firstIncorrect.focus();
   });
 }
 
@@ -884,11 +964,11 @@ function renderTrace(parent, label, trace) {
 
 function renderMicroworld() {
   if (review.microworld === null) { document.getElementById("microworld-nav-link").hidden = true; return; }
-  const section = document.getElementById("microworld-section"); section.hidden = false; const world = review.microworld; document.getElementById("microworld-title").textContent = world.title; document.getElementById("microworld-instructions").textContent = world.instructions; appendWorkstreamScope(document.getElementById("microworld-evidence"), world.evidenceIds); appendEvidence(document.getElementById("microworld-evidence"), world.evidenceIds);
+  const section = document.getElementById("microworld-section"); section.hidden = false; const world = review.microworld; document.getElementById("microworld-title").textContent = world.title; document.getElementById("microworld-instructions").textContent = world.instructions; appendEvidence(document.getElementById("microworld-evidence"), world.evidenceIds);
   const controls = document.getElementById("microworld-controls"); const selections = new Map();
   function update() {
     const scenario = world.scenarios.find(function (candidate) { return world.controls.every(function (control) { const binding = candidate.when.find(function (entry) { return entry.controlId === control.id; }); return binding && binding.optionId === selections.get(control.id); }); });
-    const view = document.getElementById("scenario-view"); view.textContent = ""; if (!scenario) { view.append(element("p", ui.microworld.noScenario, "notice")); return; } heading(view, 3, scenario.title); const comparison = element("div", undefined, "grid two"); renderTrace(comparison, ui.microworld.before, scenario.before); renderTrace(comparison, ui.microworld.after, scenario.after); view.append(comparison, element("p", scenario.lesson, "lesson"));
+    const view = document.getElementById("scenario-view"); const status = document.getElementById("scenario-status"); view.textContent = ""; if (!scenario) { view.append(element("p", ui.microworld.noScenario, "notice")); status.textContent = ui.microworld.noScenario; return; } heading(view, 3, scenario.title); const comparison = element("div", undefined, "grid two"); renderTrace(comparison, ui.microworld.before, scenario.before); renderTrace(comparison, ui.microworld.after, scenario.after); view.append(comparison, element("p", scenario.lesson, "lesson")); status.textContent = scenario.title + ". " + scenario.after.outcome;
   }
   world.controls.forEach(function (control) { const wrapper = element("div", undefined, "control"); const label = element("label", control.label); const select = element("select"); select.id = "control-" + control.id; label.setAttribute("for", select.id); control.options.forEach(function (option) { const node = element("option", option.text); node.value = option.id; if (option.id === control.defaultOptionId) node.selected = true; select.append(node); }); selections.set(control.id, control.defaultOptionId); select.addEventListener("change", function () { selections.set(control.id, select.value); update(); }); wrapper.append(label, select); controls.append(wrapper); });
   update();
@@ -896,7 +976,7 @@ function renderMicroworld() {
 
 function renderSsotCandidates() {
   if (review.ssotCandidates.length === 0) return;
-  const section = document.getElementById("ssot-section"); section.hidden = false; const content = document.getElementById("ssot-content"); review.ssotCandidates.forEach(function (entry) { const card = element("article", undefined, "card"); card.append(element("span", mapped("ssotTarget", entry.target), "tag")); heading(card, 3, entry.insight); card.append(element("p", entry.whyDurable)); if (entry.path !== null) { const path = element("p", ui.projectKnowledge.owner + ": ", "muted"); path.append(element("code", entry.path)); card.append(path); } appendEvidence(card, entry.evidenceIds); content.append(card); });
+  const section = document.getElementById("ssot-section"); section.hidden = false; const content = document.getElementById("ssot-content"); review.ssotCandidates.forEach(function (entry) { const card = element("article", undefined, "card"); card.append(element("span", mapped("ssotTarget", entry.target), "tag")); heading(card, 3, entry.insight); card.append(element("p", entry.whyDurable)); if (entry.path !== null) { const path = element("p", ui.projectKnowledge.owner + ": ", "muted"); path.append(element("code", entry.path)); card.append(path); } content.append(card); }); appendEvidence(content, review.ssotCandidates.flatMap(function (entry) { return entry.evidenceIds; }));
 }
 
 renderReviewContext();
@@ -962,7 +1042,6 @@ export function renderReviewHtml(review) {
     <p class="eyebrow">Hope · diff</p>
     <h1 id="review-title">${ui.documentTitle}</h1>
     <p id="review-lede" class="lede"></p>
-    <div id="review-lede-evidence"></div>
     <dl id="review-context" class="meta compact-meta"></dl>
     <p id="scope-summary-warning" class="notice" role="note" hidden></p>
   </header>
@@ -970,22 +1049,19 @@ export function renderReviewHtml(review) {
     <a href="#overview">${ui.nav.summary}</a>
     <a href="#workstreams">${ui.nav.behavior}</a>
     <a href="#review-focus">${ui.nav.focus}</a>
-    <a href="#literate-diff">${ui.nav.code}</a>
     <a id="microworld-nav-link" href="#microworld-section">${ui.nav.try}</a>
     <a href="#quiz">${ui.nav.quiz}</a>
-    <a href="#details">${ui.nav.details}</a>
+    <a href="#literate-diff">${ui.nav.code}</a>
   </nav>
   <main>
-    <section id="overview" aria-labelledby="overview-heading"><p class="eyebrow">${ui.overview.eyebrow}</p><h2 id="overview-heading">${ui.overview.heading}</h2><h3>${ui.overview.observableHeading}</h3><div id="observable-changes"></div><h3>${ui.overview.whyHeading}</h3><div id="background-content"></div><h3>${ui.overview.beforeAfterHeading}</h3><div id="overview-before-after" class="grid"></div></section>
-    <section id="visual-section" aria-labelledby="visual-heading"><p class="eyebrow">${ui.visual.eyebrow}</p><h2 id="visual-heading">${ui.visual.heading}</h2><div id="visual-content" class="grid"></div></section>
-    <section id="workstreams" aria-labelledby="workstream-heading"><p class="eyebrow">${ui.behavior.eyebrow}</p><h2 id="workstream-heading">${ui.behavior.heading}</h2><p class="muted">${ui.behavior.help}</p><nav id="workstream-navigation" class="jump-nav" aria-label="${ui.behavior.navigation}"></nav><div id="workstream-content" class="grid"></div></section>
-    <section id="synthesis" aria-labelledby="synthesis-heading"><p class="eyebrow">${ui.behavior.connectionsEyebrow}</p><h2 id="synthesis-heading">${ui.behavior.connectionsHeading}</h2><div id="synthesis-summary"></div><div id="synthesis-interactions" class="grid"></div></section>
-    <section id="review-focus" aria-labelledby="review-focus-heading"><p class="eyebrow">${ui.focus.eyebrow}</p><h2 id="review-focus-heading">${ui.focus.heading}</h2><div class="grid two"><div><h3>${ui.focus.invariants}</h3><div id="invariant-content"></div></div><div><h3>${ui.focus.risks}</h3><div id="risk-content"></div></div></div><h3>${ui.focus.decisions}</h3><div id="decision-content" class="grid"></div><h3>${ui.focus.verification}</h3><ul id="verification-content"></ul><h3>${ui.focus.questions}</h3><div id="question-content" class="grid"></div></section>
-    <section id="literate-diff" aria-labelledby="literate-heading"><p class="eyebrow">${ui.code.eyebrow}</p><h2 id="literate-heading">${ui.code.heading}</h2><p class="muted">${ui.code.help}</p><div id="literate-content" class="grid"></div></section>
-    <section id="microworld-section" aria-labelledby="microworld-heading" hidden><p class="eyebrow">${ui.microworld.eyebrow}</p><h2 id="microworld-heading">${ui.microworld.heading}</h2><p class="notice">${ui.microworld.notice}</p><h3 id="microworld-title"></h3><p id="microworld-instructions"></p><div id="microworld-evidence"></div><div id="microworld-controls" class="controls"></div><div id="scenario-view" role="region" aria-live="polite" aria-label="${ui.microworld.regionLabel}"></div></section>
-    <section id="quiz" aria-labelledby="quiz-heading"><p class="eyebrow">${ui.quiz.eyebrow}</p><h2 id="quiz-heading">${ui.quiz.heading}</h2><p class="muted">${ui.quiz.help}</p><form id="quiz-form"></form><p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1"></p></section>
-    <section id="ssot-section" aria-labelledby="ssot-heading" hidden><p class="eyebrow">${ui.projectKnowledge.eyebrow}</p><h2 id="ssot-heading">${ui.projectKnowledge.heading}</h2><p class="muted">${ui.projectKnowledge.help}</p><div id="ssot-content" class="grid"></div></section>
-    <section id="details" aria-labelledby="details-heading"><p class="eyebrow">${ui.details.eyebrow}</p><h2 id="details-heading">${ui.details.heading}</h2><details class="technical-details"><summary>${ui.details.summary}</summary><p class="muted details-intro">${ui.details.help}</p><dl id="details-meta" class="meta"></dl><p class="muted">${ui.details.fingerprint}: <code id="details-fingerprint"></code></p><div id="scope-details-warning" class="notice" role="note" hidden></div><details><summary>${ui.details.changedFileMap}</summary><div class="table-wrap"><table class="file-map"><thead><tr><th>${ui.details.path}</th><th>${ui.details.previousPath}</th><th>${ui.details.status}</th><th>${ui.details.lines}</th><th>${ui.details.body}</th><th>${ui.details.processingUnit}</th><th>${ui.details.relatedFlows}</th></tr></thead><tbody id="file-map-body"></tbody></table></div></details><h3>${ui.details.processedUnits}</h3><p class="muted">${ui.details.processingHelp}</p><div id="analysis-pass-content" class="grid"></div></details></section>
+    <section id="overview" aria-labelledby="overview-heading"><h2 id="overview-heading">${ui.overview.heading}</h2><h3>${ui.overview.observableHeading}</h3><div id="observable-changes"></div><div id="visual-section" aria-labelledby="visual-heading"><h3 id="visual-heading">${ui.visual.heading}</h3><div id="visual-content" class="grid"></div></div><details class="secondary-details"><summary>${ui.overview.more}</summary><h3>${ui.overview.whyHeading}</h3><div id="background-content"></div><h3>${ui.overview.beforeAfterHeading}</h3><div id="overview-before-after" class="grid"></div></details><div id="overview-evidence"></div></section>
+    <section id="workstreams" aria-labelledby="workstream-heading"><h2 id="workstream-heading">${ui.behavior.heading}</h2><p class="muted">${ui.behavior.help}</p><div id="workstream-content" class="grid"></div><details id="synthesis" class="secondary-details"><summary>${ui.behavior.connectionsSummary}</summary><div id="synthesis-summary"></div><div id="synthesis-interactions" class="grid"></div><div id="synthesis-evidence"></div></details></section>
+    <section id="review-focus" aria-labelledby="review-focus-heading"><h2 id="review-focus-heading">${ui.focus.heading}</h2><h3>${ui.focus.questions}</h3><div id="question-content" class="grid"></div><h3>${ui.focus.risks}</h3><div id="risk-content"></div><details class="secondary-details"><summary>${ui.focus.more}</summary><h3>${ui.focus.invariants}</h3><div id="invariant-content"></div><h3>${ui.focus.decisions}</h3><div id="decision-content" class="grid"></div><h3>${ui.focus.verification}</h3><ul id="verification-content"></ul></details><div id="focus-evidence"></div></section>
+    <section id="microworld-section" aria-labelledby="microworld-heading" hidden><h2 id="microworld-heading">${ui.microworld.heading}</h2><p class="notice">${ui.microworld.notice}</p><h3 id="microworld-title"></h3><p id="microworld-instructions"></p><div id="microworld-evidence"></div><div id="microworld-controls" class="controls"></div><p id="scenario-status" class="sr-only" role="status" aria-live="polite"></p><div id="scenario-view" role="region" aria-label="${ui.microworld.regionLabel}"></div></section>
+    <section id="quiz" aria-labelledby="quiz-heading"><h2 id="quiz-heading">${ui.quiz.heading}</h2><details id="quiz-disclosure" class="section-disclosure"><summary id="quiz-open"></summary><p class="muted">${ui.quiz.help}</p><form id="quiz-form"></form><div id="quiz-evidence"></div><p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1"></p></details></section>
+    <section id="literate-diff" aria-labelledby="literate-heading"><h2 id="literate-heading">${ui.code.heading}</h2><p class="muted">${ui.code.help}</p><div id="literate-content" class="grid"></div></section>
+    <section id="ssot-section" aria-labelledby="ssot-heading" hidden><h2 id="ssot-heading">${ui.projectKnowledge.heading}</h2><p class="muted">${ui.projectKnowledge.help}</p><div id="ssot-content" class="grid"></div></section>
+    <section id="details" aria-labelledby="details-heading"><h2 id="details-heading">${ui.details.heading}</h2><details class="technical-details"><summary>${ui.details.summary}</summary><p class="muted details-intro">${ui.details.help}</p><dl id="details-meta" class="meta"></dl><p class="muted">${ui.details.fingerprint}: <code id="details-fingerprint"></code></p><div id="scope-details-warning" class="notice" role="note" hidden></div><details><summary>${ui.details.changedFileMap}</summary><div class="table-wrap" tabindex="0" role="region" aria-label="${ui.details.changedFileMap}"><table class="file-map"><thead><tr><th scope="col">${ui.details.path}</th><th scope="col">${ui.details.previousPath}</th><th scope="col">${ui.details.status}</th><th scope="col">${ui.details.lines}</th><th scope="col">${ui.details.body}</th><th scope="col">${ui.details.processingUnit}</th><th scope="col">${ui.details.relatedFlows}</th></tr></thead><tbody id="file-map-body"></tbody></table></div></details><h3>${ui.details.processedUnits}</h3><p class="muted">${ui.details.processingHelp}</p><div id="analysis-pass-content" class="grid"></div></details></section>
   </main>
   <footer>${ui.footer}</footer>
   <noscript>${ui.noscript}</noscript>
