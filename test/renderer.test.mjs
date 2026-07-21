@@ -847,9 +847,13 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /min-height: 44px/u);
   assert.match(first, /@media \(max-width: 940px\)[\s\S]*\.chapter, \.evidence-entry, \.optional-module, #review-focus \{ scroll-margin-top: 76px; \}/u);
   assert.match(first, /\.table-wrap:focus-visible,[^}]*\.quiz-question:focus,[^}]*\.result:focus,[^}]*\.map-node:focus-visible \{ outline: 3px solid var\(--accent\)/u);
-  assert.match(first, /\.chapter-map \.map-node:focus-visible \{ outline-color: #eff7f3; box-shadow: 0 0 0 6px #0b4f3d; \}/u);
-  assert.match(first, /\.chapter-map \.map-connections summary:focus-visible, \.chapter-map \.map-connections a:focus-visible \{ outline-color: #eff7f3; \}/u);
-  assert.match(first, /\.chapter-map > \.chapter-surface code \{ color: #eff7f3;/u);
+  assert.match(first, /\.chapter-surface \{ border-top: 1px solid var\(--line\); padding-top:/u);
+  assert.match(first, /\.chapter-map \.chapter-surface, \.chapter-lab \.chapter-surface \{ border: 1px solid var\(--line\);/u);
+  assert.doesNotMatch(first, /\.chapter-(?:overview|code|quiz|evidence) \.chapter-surface \{ background:/u);
+  assert.match(first, /\.chapter-map \.map-node:focus-visible \{ outline-color: var\(--accent\); \}/u);
+  assert.match(first, /\.code-file \{ position: sticky; top: 18px; align-self: start; \}/u);
+  assert.match(first, /@media \(max-width: 940px\)[\s\S]*\.code-file \{ top: 72px; \}/u);
+  assert.match(first, /@media \(max-width: 760px\)[\s\S]*\.code-file, \.lab-controls \{ position: static; \}/u);
   assert.match(first, /\.control \{[^}]*display: grid;[^}]*min-width: 0;[^}]*max-width: 100%;/u);
   assert.match(first, /\.control select \{ width: 100%; min-width: 0; max-width: 100%; \}/u);
   assert.match(first, /\.grid > \*, \.card, details, section, fieldset, \.table-wrap, \.optional-module, \.system-map-detail \{ min-width: 0; max-width: 100%; \}/u);
@@ -873,7 +877,7 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.doesNotMatch(first, /item\.append\(element\("pre", entry\.excerpt/u);
   assert.match(first, /flow\.setAttribute\("role", "list"\)/u);
   assert.match(first, /element\("span", String\(index \+ 1\), "flow-number"\)/u);
-  assert.match(first, /\.visual-flow::before \{[^}]*width: 2px;[^}]*content: "";/u);
+  assert.match(first, /\.visual-flow::before \{[^}]*width: 1px;[^}]*content: "";/u);
   assert.doesNotMatch(first, /counter-reset: hope-step|\.visual-flow li::marker/u);
   assert.match(first, /element\("fieldset", undefined, "quiz-question"\)/u);
   assert.match(first, /element\("h6", ui\.overview\.before\)/u);
