@@ -159,11 +159,12 @@ By default, the HTML lives in a private OS temporary directory. Hope does not:
 - write knowledge candidates into the target repository.
 
 Before creating a default temporary review, Hope safely removes its own default
-reviews that have been eligible for cleanup for at least seven days. The render
-handoff includes the exact `eligibleAfter` time embedded in the review's first
-line when it is created. Touching the file does not move that authoritative
-time. Cleanup happens only on a later default render, so a review is not deleted
-by a background process at that instant. Anything with an unexpected name,
+reviews that have reached their cleanup time, fixed seven days after creation.
+The render handoff includes the exact `eligibleAfter` time embedded in the
+review's first line when it is created. Touching the file does not move that
+authoritative time. Cleanup happens only on a later default render, so a review
+is not deleted by a background process at that instant. Anything with an
+unexpected name,
 marker, structure, or symbolic link is preserved. Hope also requires the
 expected owner and private permissions on platforms that expose those checks.
 On POSIX, it scans only a current-user-private or safely sticky-shared temporary

@@ -3,6 +3,10 @@
 import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 
+import {
+  MAX_INSPECTION_OUTPUT_BYTES,
+} from "../plugins/hope/skills/diff/scripts/lib/inspection-pages.mjs";
+
 const root = new URL("../", import.meta.url);
 const fromRoot = (relativePath) => new URL(relativePath, root);
 const read = async (relativePath) => await readFile(fromRoot(relativePath), "utf8");
@@ -72,6 +76,7 @@ const [
   diffOpenAi,
   diffInspector,
   reviewRetention,
+  contributing,
   readme,
   readmeKo,
   changelog,
@@ -88,6 +93,7 @@ const [
   read("plugins/hope/skills/diff/agents/openai.yaml"),
   read("plugins/hope/skills/diff/scripts/inspect-change-request.mjs"),
   read("plugins/hope/skills/diff/scripts/lib/review-retention.mjs"),
+  read("CONTRIBUTING.md"),
   read("README.md"),
   read("README.ko.md"),
   read("CHANGELOG.md"),
@@ -160,6 +166,18 @@ assert.match(reviewContract, /fixed,[\s\S]*trusted dictionary/u);
 assert.match(diffSkill, /compact serialized[\s\S]*4 MiB[\s\S]*8 MiB/u);
 assert.match(reviewContract, /ReviewModelV1[\s\S]*4 MiB[\s\S]*8 MiB/u);
 assert.match(security, /Review Model[\s\S]*4 MiB[\s\S]*8 MiB/u);
+assert.equal(MAX_INSPECTION_OUTPUT_BYTES, 16 * 1024);
+for (const document of [diffSkill, reviewContract, contributing, security]) {
+  assert.match(document, /16 KiB/u);
+}
+assert.doesNotMatch(contributing, /8 KiB stdout ceiling/u);
+assert.match(security, /deliberately does not\s+bind[\s\S]*`updated_at`/u);
+assert.doesNotMatch(
+  security,
+  /also binds the pull request's provider-supplied `updated_at` value/u,
+);
+assert.match(readme, /cleanup time, fixed seven days after creation/u);
+assert.doesNotMatch(readme, /eligible for cleanup for at least seven days/u);
 
 assert.equal(changeRequestSchema.properties.schemaVersion.const, 1);
 assert.equal(reviewModelSchema.properties.schemaVersion.const, 1);
