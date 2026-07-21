@@ -46,7 +46,7 @@ inputs.
 
 Use the inspector contract in order: follow the summary receipt chain to its
 terminal page, then do the same for every planned pass. Each invocation must
-remain within the 8 KiB stdout ceiling; never aggregate page commands into one
+remain within the 16 KiB stdout ceiling; never aggregate page commands into one
 tool output. The Review Model must bind the summary and every planned pass's
 page count and terminal receipt in `analysisCoverage` before semantic synthesis.
 Those fields are the active session's inspection attestation, bound by the
