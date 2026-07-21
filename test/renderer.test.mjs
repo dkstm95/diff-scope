@@ -780,6 +780,7 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /"generated-or-lockfile":"생성\/잠금 파일"/u);
   assert.match(first, /id="workstream-content" class="system-map-list" role="tablist"/u);
   assert.match(first, /element\("button", undefined, "map-node"\)/u);
+  assert.match(first, /button\.append\(element\("span", workstream\.title, "summary-title"\)\)/u);
   assert.match(first, /id="workstream-detail-panel" class="system-map-detail" role="tabpanel"/u);
   assert.match(first, /workstreamTarget/);
   assert.match(first, /return "workstream-card-" \+ id/u);
@@ -799,8 +800,8 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.doesNotMatch(compactContext, /ui\.context\.(?:author|commits|files|changedLines)/u);
   const sectionOrder = [
     'id="overview"',
-    'id="review-focus"',
     'id="workstreams"',
+    'id="review-focus"',
     'id="literate-diff"',
     'id="microworld-section"',
     'id="quiz"',
@@ -839,11 +840,16 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /이 실험은 설명을 돕는 예시이며 프로젝트 코드를 실행하지 않습니다/u);
   assert.doesNotMatch(first, /id="quiz-disclosure"/u);
   assert.match(first, /id="quiz-progress-track" class="quiz-track" role="progressbar"/u);
+  assert.match(first, /role="progressbar" aria-labelledby="quiz-progress-label"/u);
   assert.match(first, /id="scenario-status" class="sr-only" role="status" aria-live="polite"/u);
+  assert.match(first, /aria-atomic="true"/u);
   assert.match(first, /<th scope="col">경로<\/th>/u);
   assert.match(first, /min-height: 44px/u);
   assert.match(first, /@media \(max-width: 940px\)[\s\S]*\.chapter, \.evidence-entry, \.optional-module, #review-focus \{ scroll-margin-top: 76px; \}/u);
-  assert.match(first, /\.table-wrap:focus-visible,[^}]*\.quiz-question:focus,[^}]*\.result:focus,[^}]*\.map-node:focus-visible \{ outline: 3px solid #5cc6a6/u);
+  assert.match(first, /\.table-wrap:focus-visible,[^}]*\.quiz-question:focus,[^}]*\.result:focus,[^}]*\.map-node:focus-visible \{ outline: 3px solid var\(--accent\)/u);
+  assert.match(first, /\.chapter-map \.map-node:focus-visible \{ outline-color: #eff7f3; box-shadow: 0 0 0 6px #0b4f3d; \}/u);
+  assert.match(first, /\.chapter-map \.map-connections summary:focus-visible, \.chapter-map \.map-connections a:focus-visible \{ outline-color: #eff7f3; \}/u);
+  assert.match(first, /\.chapter-map > \.chapter-surface code \{ color: #eff7f3;/u);
   assert.match(first, /\.control \{[^}]*display: grid;[^}]*min-width: 0;[^}]*max-width: 100%;/u);
   assert.match(first, /\.control select \{ width: 100%; min-width: 0; max-width: 100%; \}/u);
   assert.match(first, /\.grid > \*, \.card, details, section, fieldset, \.table-wrap, \.optional-module, \.system-map-detail \{ min-width: 0; max-width: 100%; \}/u);
@@ -852,6 +858,10 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /\.table-wrap \{ width: 100%; max-width: 100%; overflow-x: auto;/u);
   assert.match(first, /@media \(max-width: 640px\)[\s\S]*\.meta, \.compact-meta \{ grid-template-columns: 1fr; \}/u);
   assert.match(first, /fieldset\.hidden = index !== 0/u);
+  assert.match(first, /if \(selected\.size === 0\)/u);
+  assert.match(first, /view\.feedback\.textContent = ui\.quiz\.choose/u);
+  assert.match(first, /views\.forEach\(function \(view\) \{ view\.fieldset\.hidden = false; \}\)/u);
+  assert.match(first, /form\.classList\.add\("quiz-review"\)/u);
   assert.match(first, /button\.textContent = currentIndex === views\.length - 1 \? ui\.quiz\.finish : ui\.quiz\.next/u);
   assert.match(first, /document\.getElementById\("review-title"\)\.textContent = review\.title/u);
   assert.match(first, /id="review-source" target="_blank" rel="noreferrer noopener"/u);
@@ -863,12 +873,17 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.doesNotMatch(first, /item\.append\(element\("pre", entry\.excerpt/u);
   assert.match(first, /flow\.setAttribute\("role", "list"\)/u);
   assert.match(first, /element\("span", String\(index \+ 1\), "flow-number"\)/u);
+  assert.match(first, /\.visual-flow::before \{[^}]*width: 2px;[^}]*content: "";/u);
   assert.doesNotMatch(first, /counter-reset: hope-step|\.visual-flow li::marker/u);
   assert.match(first, /element\("fieldset", undefined, "quiz-question"\)/u);
   assert.match(first, /element\("h6", ui\.overview\.before\)/u);
   assert.match(first, /element\("h6", ui\.overview\.after\)/u);
   assert.match(first, /"more":"배경과 변경 전후 자세히 보기","before":"변경 전","after":"변경 후"/u);
-  assert.match(first, /"before":"선택한 조건","after":"예상 동작","outcome":"결과"/u);
+  assert.match(first, /"before":"변경 전","after":"변경 후","outcome":"결과"/u);
+  assert.match(first, /\.section-nav a\[aria-current="location"\]/u);
+  assert.match(first, /link\.setAttribute\("aria-current", "location"\)/u);
+  assert.match(first, /String\(index \+ 1\)\.padStart\(2, "0"\)/u);
+  assert.match(first, /@media \(prefers-reduced-motion: reduce\)/u);
   assert.doesNotMatch(first, /appendEvidence\(item, step\.evidenceIds\)/u);
   assert.doesNotMatch(first, /appendEvidence\(fieldset, question\.evidenceIds\)/u);
   assert.doesNotMatch(first, /<\/script><script>alert\('unsafe'\)/);
@@ -905,6 +920,8 @@ test("renders the fixed interface in the selected language", async () => {
   assert.match(html, /<h2 id="microworld-heading">Microworld<\/h2>/u);
   assert.match(html, /<h2 id="quiz-heading">Check your understanding<\/h2>/u);
   assert.match(html, /<h2 id="evidence-heading">Evidence and original<\/h2>/u);
+  assert.match(html, /"before":"Before change","after":"After change","outcome":"Outcome"/u);
+  assert.match(html, /"choose":"Choose an answer before checking it\."/u);
   assert.match(html, /id="details-heading" class="summary-title">Analysis details<\/span>/u);
   assert.match(html, /Hope checked only the changed parts shown in this PR's diff/u);
   assert.match(html, /Show evidence \(\{count\}\)/u);

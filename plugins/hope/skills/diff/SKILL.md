@@ -101,9 +101,17 @@ Follow these rules:
   crosses pass boundaries.
 - State partial body coverage near the top when any body was excluded.
 - Keep verification `not-run` or `unknown`. Hope does not collect CI results.
-- Use a visual only when it makes behavior easier to understand.
+- Present the review in six chapters: overview, system map and review points,
+  code, optional microworld, quiz, and evidence.
+- Use a visual only when it makes behavior easier to understand. Use
+  `before-after` for a state change, `flow` for a sequence with no branches,
+  and `decision-table` for results that depend on conditions. Never hide an
+  important branch inside a linear flow.
 - Create one quiz for the whole change. Use three to five useful questions.
-- Set `microworld` to `null` unless adjustable scenarios add real learning value.
+  Prefer predicting behavior for a new input over recalling a name or path.
+- Set `microworld` to `null` unless adjustable scenarios add real learning
+  value. Do not repeat the same relationship in a microworld and a static
+  visual.
 - Use short sentences and familiar words. For Korean, use one consistent
   polite `-합니다` style.
 - Keep authored content in the selected locale. Preserve code identifiers,

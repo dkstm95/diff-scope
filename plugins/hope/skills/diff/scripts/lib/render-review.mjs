@@ -39,8 +39,8 @@ const REVIEW_STYLE = String.raw`:root {
 html { scroll-behavior: smooth; }
 body { margin: 0; color: var(--ink); background: var(--paper); line-height: 1.62; }
 h1, h2, h3, h4 { line-height: 1.18; }
-h1 { margin: 0; max-width: 15ch; font-size: clamp(2.6rem, 7vw, 5.8rem); letter-spacing: -.06em; }
-h2 { margin: 0; max-width: 18ch; font-size: clamp(2rem, 4.5vw, 3.7rem); letter-spacing: -.045em; }
+h1 { margin: 0; max-width: 18ch; font-size: clamp(2.6rem, 6vw, 4.4rem); letter-spacing: -.055em; }
+h2 { margin: 0; max-width: 22ch; font-size: clamp(2rem, 4vw, 3.15rem); letter-spacing: -.04em; }
 h3 { margin-top: 28px; }
 h5 { font-size: 1rem; }
 p, li { max-width: 68ch; }
@@ -50,10 +50,10 @@ code { border-radius: 4px; padding: 2px 5px; background: #eeece4; font-family: u
 button, select { min-height: 44px; max-width: 100%; border: 1px solid var(--muted); border-radius: 10px; padding: 10px 13px; color: var(--ink); background: #fff; font: inherit; }
 button { border-color: var(--accent); color: #fff; background: var(--accent); font-weight: 760; cursor: pointer; }
 button:hover { filter: brightness(.95); }
-button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible, .table-wrap:focus-visible, .quiz-question:focus, .result:focus, .map-node:focus-visible { outline: 3px solid #5cc6a6; outline-offset: 3px; }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible, .table-wrap:focus-visible, .quiz-question:focus, .result:focus, .map-node:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 [hidden] { display: none !important; }
 
-.review-cover { width: min(1180px, calc(100% - 40px)); margin-inline: auto; padding: clamp(48px, 8vw, 112px) 0 clamp(36px, 6vw, 72px); }
+.review-cover { width: min(1180px, calc(100% - 40px)); margin-inline: auto; padding: clamp(48px, 7vw, 88px) 0 clamp(36px, 5vw, 60px); }
 .cover-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, .7fr); gap: clamp(32px, 7vw, 96px); align-items: end; }
 .cover-copy p { max-width: 62ch; }
 .cover-context { border-left: 1px solid var(--line); padding-left: 24px; }
@@ -68,8 +68,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 .section-nav { position: sticky; top: 18px; display: grid; gap: 4px; padding: 10px 0; }
 .section-nav a { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); gap: 8px; min-height: 44px; align-items: center; border-radius: 10px; padding: 7px 9px; color: var(--muted); font-size: .92rem; font-weight: 760; text-decoration: none; }
 .section-nav a:hover { color: var(--ink); background: rgba(255, 255, 255, .72); }
+.section-nav a[aria-current="location"] { color: var(--accent); background: #fff; box-shadow: inset 3px 0 0 var(--accent); }
 .nav-number { color: #96a09b; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem; letter-spacing: .08em; }
-main { display: grid; gap: clamp(60px, 10vw, 120px); min-width: 0; padding-bottom: 96px; }
+main { display: grid; gap: clamp(56px, 8vw, 92px); min-width: 0; padding-bottom: 96px; }
 .chapter { min-width: 0; max-width: 100%; scroll-margin-top: 24px; }
 .chapter-head { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 30px; }
 .chapter-number { display: grid; width: 2.4rem; height: 2.4rem; place-items: center; border: 1px solid currentColor; border-radius: 50%; color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; font-weight: 800; }
@@ -84,7 +85,7 @@ main { display: grid; gap: clamp(60px, 10vw, 120px); min-width: 0; padding-botto
 .chapter-evidence .chapter-surface { background: #efeee8; }
 .chapter-map .chapter-surface .muted, .chapter-map .chapter-surface .evidence { color: #aebdb7; }
 .chapter-map #visual-content .card { color: var(--ink); }
-.chapter-map code { color: #eff7f3; background: #2a3a34; }
+.chapter-map > .chapter-surface code { color: #eff7f3; background: #2a3a34; }
 
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .muted { color: var(--muted); }
@@ -116,27 +117,28 @@ main { display: grid; gap: clamp(60px, 10vw, 120px); min-width: 0; padding-botto
 .excerpt { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; border: 1px solid var(--line); border-radius: 9px; padding: 14px; background: #e8e7e1; }
 .before-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .before-after h5, .before-after h6 { margin: 0 0 8px; }
-.overview-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: clamp(24px, 5vw, 48px); align-items: start; }
-#review-focus { border-left: 1px solid var(--line); padding-left: clamp(20px, 3vw, 32px); scroll-margin-top: 24px; }
+.overview-layout { display: block; }
+#review-focus { scroll-margin-top: 24px; }
 #review-focus h3:first-child { margin-top: 0; }
+.review-focus-panel { margin-top: 24px; border: 1px solid var(--line); border-radius: 18px; padding: clamp(20px, 4vw, 36px); color: var(--ink); background: #fffdf8; box-shadow: 0 16px 38px rgba(28, 37, 33, .07); }
 .focus-intro { margin-top: -8px; }
-.attention-grid { display: grid; gap: 12px; }
+.attention-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
 .attention-panel { border-top: 1px solid var(--line); padding-top: 10px; }
 .attention-panel > h4 { margin: 0; }
 .attention-panel > :last-child { margin-bottom: 0; }
 
-.visual-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 0; list-style: none; }
-.visual-flow li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; border: 1px solid #d7ddd9; border-radius: 12px; padding: 14px; color: var(--ink); background: #fff; }
-.flow-number { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); font-size: .82rem; font-weight: 800; }
-.flow-copy { min-width: 0; }
+.visual-flow { position: relative; display: grid; gap: 0; padding: 0; list-style: none; }
+.visual-flow::before { position: absolute; top: 1.9rem; bottom: 1.9rem; left: 1.05rem; width: 2px; background: #9ab8ae; content: ""; }
+.visual-flow li { position: relative; display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); gap: 13px; align-items: start; padding: 9px 0; color: var(--ink); }
+.flow-number { z-index: 1; display: grid; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); box-shadow: 0 0 0 5px #fff; font-size: .82rem; font-weight: 800; }
+.flow-copy { min-width: 0; border: 1px solid #d7ddd9; border-radius: 12px; padding: 13px 15px; background: #fff; }
 .flow-copy p { margin: 6px 0 0; }
 .system-map-layout { display: grid; grid-template-columns: minmax(210px, .8fr) minmax(0, 1.45fr); gap: 18px; margin-top: 24px; }
 .system-map-list { display: grid; align-content: start; gap: 8px; }
 .map-node { width: 100%; border-color: #486158; padding: 14px; color: #dbe9e4; background: #22332c; text-align: left; }
 .map-node .summary-title { color: inherit; }
-.map-node .summary-copy { color: #aebdb7; }
 .map-node[aria-selected="true"] { border-color: #70d4b5; color: #14221c; background: #70d4b5; }
-.map-node[aria-selected="true"] .summary-copy { color: #345348; }
+.chapter-map .map-node:focus-visible { outline-color: #eff7f3; box-shadow: 0 0 0 6px #0b4f3d; }
 .system-map-detail { min-height: 360px; border-radius: 16px; padding: clamp(18px, 3vw, 28px); color: var(--ink); background: #f8faf8; }
 .system-map-detail > :first-child { margin-top: 0; }
 .system-map-detail .walkthrough-steps { padding: 0; list-style: none; }
@@ -146,6 +148,7 @@ main { display: grid; gap: clamp(60px, 10vw, 120px); min-width: 0; padding-botto
 .chapter-map .map-connections .card { border-color: #40534c; color: #e9f2ee; background: #22332c; }
 .chapter-map .map-connections .tag { color: #193228; background: #70d4b5; }
 .chapter-map .map-connections a { color: #8de0c5; }
+.chapter-map .map-connections summary:focus-visible, .chapter-map .map-connections a:focus-visible { outline-color: #eff7f3; }
 
 .code-walkthrough { display: grid; grid-template-columns: minmax(180px, .55fr) minmax(0, 1.45fr); gap: 24px; border-top: 1px solid var(--line); padding: 26px 0; }
 .code-walkthrough:first-child { border-top: 0; padding-top: 0; }
@@ -183,6 +186,9 @@ legend { max-width: 100%; margin-bottom: 16px; padding: 0; font-size: clamp(1.25
 .quiz-actions { display: flex; justify-content: flex-end; margin-top: 22px; }
 .quiz-actions button { min-width: 150px; background: var(--inferred); border-color: var(--inferred); }
 .answer { margin: 18px 0 0; border-radius: 10px; padding: 13px 15px; background: #fffdf8; }
+.needs-answer { color: var(--warning); background: var(--warning-soft); }
+.quiz-review .quiz-question { margin-top: 28px; border-top: 1px solid #dbc9a7; padding-top: 28px; }
+.quiz-review .quiz-question:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
 .result { min-height: 1.6em; margin-top: 20px; font-weight: 760; }
 .correct { color: var(--success); }
 .incorrect { color: var(--danger); }
@@ -217,8 +223,8 @@ footer { width: min(920px, calc(100% - 40px)); margin-inline: auto; padding: 0 0
 }
 @media (max-width: 760px) {
   .review-cover, .article-shell { width: min(100% - 24px, 1180px); }
-  .cover-grid, .overview-layout, .system-map-layout, .code-walkthrough, .lab-grid { grid-template-columns: 1fr; }
-  .cover-context, #review-focus { border-left: 0; border-top: 1px solid var(--line); padding: 20px 0 0; }
+  .cover-grid, .system-map-layout, .code-walkthrough, .lab-grid { grid-template-columns: 1fr; }
+  .cover-context { border-left: 0; border-top: 1px solid var(--line); padding: 20px 0 0; }
   .compact-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lab-controls { position: static; }
   .system-map-detail, .lab-canvas { min-height: 0; }
@@ -236,9 +242,12 @@ footer { width: min(920px, calc(100% - 40px)); margin-inline: auto; padding: 0 0
   .card { padding: 14px; }
   .before-after, .grid.two { grid-template-columns: 1fr; }
   .meta, .compact-meta { grid-template-columns: 1fr; }
-  .visual-flow { grid-template-columns: 1fr; }
   th, td { padding: 8px; }
   footer { width: calc(100% - 20px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .quiz-track span { transition: none; }
 }`;
 
 const REVIEW_UI = {
@@ -374,8 +383,8 @@ const REVIEW_UI = {
       heading: "Microworld",
       notice: "This is an explanation aid, not running project code.",
       noScenario: "No scenario matches this combination.",
-      before: "Selected conditions",
-      after: "Expected behavior",
+      before: "Before change",
+      after: "After change",
       outcome: "Outcome",
       regionLabel: "Selected scenario",
     },
@@ -388,6 +397,7 @@ const REVIEW_UI = {
       submit: "Check answers and show explanations",
       progress: "Question {current} of {total}",
       check: "Check answer",
+      choose: "Choose an answer before checking it.",
       next: "Next question",
       finish: "Show result",
       correct: "Correct.",
@@ -395,6 +405,7 @@ const REVIEW_UI = {
       pass: "Passed",
       below: "Below the target",
       resultSuffix: "This score helps locate gaps; it does not prove complete understanding.",
+      reviewAnswers: "Review your answers and the explanations below.",
       result: "{correct} of {total} correct · {percent}%. {suffix}",
       correctCount: "correct",
     },
@@ -578,8 +589,8 @@ const REVIEW_UI = {
       heading: "마이크로월드",
       notice: "이 실험은 설명을 돕는 예시이며 프로젝트 코드를 실행하지 않습니다.",
       noScenario: "이 조합에 맞는 시나리오가 없습니다.",
-      before: "선택한 조건",
-      after: "예상 동작",
+      before: "변경 전",
+      after: "변경 후",
       outcome: "결과",
       regionLabel: "선택한 시나리오",
     },
@@ -592,6 +603,7 @@ const REVIEW_UI = {
       submit: "정답과 설명 확인",
       progress: "{total}개 중 {current}번째 질문",
       check: "정답 확인",
+      choose: "답을 선택한 뒤 확인하세요.",
       next: "다음 질문",
       finish: "결과 보기",
       correct: "맞았습니다.",
@@ -599,6 +611,7 @@ const REVIEW_UI = {
       pass: "기준 통과",
       below: "기준 미달",
       resultSuffix: "이 점수는 이해가 부족한 지점을 찾는 데만 사용되며 완전한 이해를 증명하지 않습니다.",
+      reviewAnswers: "아래에서 답과 설명을 다시 확인하세요.",
       result: "{total}개 중 {correct}개 정답 · {percent}%. {suffix}",
       correctCount: "개 정답",
     },
@@ -843,6 +856,60 @@ function renderReviewContext() {
   }
 }
 
+function renderNavigation() {
+  const nav = document.querySelector(".section-nav");
+  const links = Array.from(nav.querySelectorAll('a[href^="#"]')).filter(function (link) {
+    const target = document.getElementById(link.getAttribute("href").slice(1));
+    return target !== null && !link.hidden && !target.hidden;
+  });
+  const chapterLinks = new Map();
+
+  links.forEach(function (link, index) {
+    const target = document.getElementById(link.getAttribute("href").slice(1));
+    const number = String(index + 1).padStart(2, "0");
+    link.querySelector(".nav-number").textContent = number;
+    target.querySelector(".chapter-number").textContent = number;
+    chapterLinks.set(target.id, link);
+  });
+
+  function activate(link) {
+    links.forEach(function (candidate) { candidate.removeAttribute("aria-current"); });
+    link.setAttribute("aria-current", "location");
+    if (window.innerWidth <= 940) {
+      const left = link.offsetLeft;
+      const right = left + link.offsetWidth;
+      if (left < nav.scrollLeft) nav.scrollLeft = Math.max(0, left - 8);
+      else if (right > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = right - nav.clientWidth + 8;
+    }
+  }
+
+  function activateFromHash() {
+    const target = document.getElementById(window.location.hash.slice(1));
+    const chapter = target === null ? null : target.closest(".chapter");
+    const link = chapter === null ? undefined : chapterLinks.get(chapter.id);
+    if (link !== undefined) activate(link);
+  }
+
+  activate(links[0]);
+  activateFromHash();
+  window.addEventListener("hashchange", activateFromHash);
+
+  if ("IntersectionObserver" in window) {
+    const visible = new Set();
+    const observer = new window.IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) visible.add(entry.target);
+        else visible.delete(entry.target);
+      });
+      const nearest = Array.from(visible).sort(function (left, right) {
+        return Math.abs(left.getBoundingClientRect().top) - Math.abs(right.getBoundingClientRect().top);
+      })[0];
+      if (nearest !== undefined) activate(chapterLinks.get(nearest.id));
+    }, { rootMargin: "-10% 0px -70% 0px", threshold: [0, 0.01] });
+    chapterLinks.forEach(function (_link, chapterId) { observer.observe(document.getElementById(chapterId)); });
+  }
+}
+
 function renderTechnicalDetails() {
   const change = review.changeRequest;
   const passPageCount = review.analysisCoverage.processedPasses.reduce(function (total, pass) { return total + pass.pageCount; }, 0);
@@ -1033,7 +1100,7 @@ function renderWorkstreams() {
     button.setAttribute("aria-controls", "workstream-detail-panel");
     button.setAttribute("aria-selected", "false");
     button.tabIndex = -1;
-    button.append(element("span", workstream.title, "summary-title"), element("span", workstream.summary, "summary-copy"));
+    button.append(element("span", workstream.title, "summary-title"));
     button.addEventListener("click", function () { activateWorkstream(workstream, button); });
     button.addEventListener("keydown", function (event) {
       const buttons = Array.from(workstreamButtonById.values());
@@ -1195,14 +1262,17 @@ function renderQuiz() {
   }
 
   function showResult() {
-    form.hidden = true;
     progressLabel.textContent = format(ui.quiz.progress, { current: views.length, total: views.length });
     progressTrack.setAttribute("aria-valuenow", "100");
     progressBar.style.width = "100%";
     const percent = Math.round((correctCount / views.length) * 100);
     const result = document.getElementById("quiz-result");
     result.className = "result";
-    result.textContent = format(ui.quiz.result, { correct: correctCount, total: views.length, percent: percent, suffix: ui.quiz.resultSuffix });
+    result.hidden = false;
+    result.textContent = format(ui.quiz.result, { correct: correctCount, total: views.length, percent: percent, suffix: ui.quiz.resultSuffix }) + " " + ui.quiz.reviewAnswers;
+    views.forEach(function (view) { view.fieldset.hidden = false; });
+    actions.hidden = true;
+    form.classList.add("quiz-review");
     result.focus();
   }
 
@@ -1216,6 +1286,13 @@ function renderQuiz() {
       return;
     }
     const selected = new Set(view.inputs.filter(function (input) { return input.checked; }).map(function (input) { return input.value; }));
+    if (selected.size === 0) {
+      view.feedback.hidden = false;
+      view.feedback.className = "answer needs-answer";
+      view.feedback.textContent = ui.quiz.choose;
+      view.inputs[0].focus();
+      return;
+    }
     const expected = new Set(view.question.correctOptionIds);
     const correct = selected.size === expected.size && Array.from(expected).every(function (optionId) { return selected.has(optionId); });
     if (correct) correctCount += 1;
@@ -1239,7 +1316,7 @@ function renderMicroworld() {
   const controls = document.getElementById("microworld-controls"); const selections = new Map();
   function update() {
     const scenario = world.scenarios.find(function (candidate) { return world.controls.every(function (control) { const binding = candidate.when.find(function (entry) { return entry.controlId === control.id; }); return binding && binding.optionId === selections.get(control.id); }); });
-    const view = document.getElementById("scenario-view"); const status = document.getElementById("scenario-status"); view.textContent = ""; if (!scenario) { view.append(element("p", ui.microworld.noScenario, "notice")); status.textContent = ui.microworld.noScenario; return; } heading(view, 3, scenario.title); const comparison = element("div", undefined, "grid two"); renderTrace(comparison, ui.microworld.before, scenario.before); renderTrace(comparison, ui.microworld.after, scenario.after); view.append(comparison, element("p", scenario.lesson, "lesson")); const conditions = world.controls.map(function (control) { const option = control.options.find(function (candidate) { return candidate.id === selections.get(control.id); }); return control.label + ": " + option.text; }).join("; "); status.textContent = conditions + ". " + ui.microworld.before + ": " + scenario.before.outcome + ". " + ui.microworld.after + ": " + scenario.after.outcome + ". " + scenario.lesson;
+    const view = document.getElementById("scenario-view"); const status = document.getElementById("scenario-status"); view.textContent = ""; if (!scenario) { view.append(element("p", ui.microworld.noScenario, "notice")); status.textContent = ui.microworld.noScenario; return; } heading(view, 3, scenario.title); const comparison = element("div", undefined, "grid two"); renderTrace(comparison, ui.microworld.before, scenario.before); renderTrace(comparison, ui.microworld.after, scenario.after); view.append(comparison, element("p", scenario.lesson, "lesson")); status.textContent = scenario.title + ". " + ui.microworld.after + ": " + scenario.after.outcome;
   }
   world.controls.forEach(function (control) { const wrapper = element("div", undefined, "control"); const label = element("label", control.label); const select = element("select"); select.id = "control-" + control.id; select.setAttribute("aria-controls", "scenario-view"); label.setAttribute("for", select.id); control.options.forEach(function (option) { const node = element("option", option.text); node.value = option.id; if (option.id === control.defaultOptionId) node.selected = true; select.append(node); }); selections.set(control.id, control.defaultOptionId); select.addEventListener("change", function () { selections.set(control.id, select.value); update(); }); wrapper.append(label, select); controls.append(wrapper); });
   update();
@@ -1264,6 +1341,7 @@ renderQuiz();
 renderSsotCandidates();
 renderEvidenceIndex();
 renderTechnicalDetails();
+renderNavigation();
 openWorkstreamFromHash();
 openEvidenceFromHash();
 window.addEventListener("hashchange", openWorkstreamFromHash);
@@ -1352,18 +1430,6 @@ export function renderReviewHtml(review) {
             <details class="secondary-details"><summary>${ui.overview.more}</summary><h3>${ui.overview.whyHeading}</h3><div id="background-content"></div><h3>${ui.overview.beforeAfterHeading}</h3><div id="overview-before-after" class="grid"></div></details>
             <div id="overview-evidence"></div>
           </div>
-          <aside id="review-focus" aria-labelledby="review-focus-heading">
-            <h3 id="review-focus-heading">${ui.focus.heading}</h3>
-            <p class="muted focus-intro">${ui.focus.intro}</p>
-            <div class="attention-grid">
-              <article class="attention-panel"><h4>${ui.focus.risks}</h4><div id="risk-content"></div></article>
-              <article class="attention-panel"><h4>${ui.focus.verification}</h4><ul id="verification-content"></ul></article>
-            </div>
-            <h4>${ui.focus.questions}</h4>
-            <div id="question-content" class="grid"></div>
-            <details class="secondary-details"><summary>${ui.focus.more}</summary><h4>${ui.focus.invariants}</h4><div id="invariant-content"></div><h4>${ui.focus.decisions}</h4><div id="decision-content" class="grid"></div></details>
-            <div id="focus-evidence"></div>
-          </aside>
         </div>
       </section>
       <section id="workstreams" class="chapter chapter-map" aria-labelledby="workstream-heading">
@@ -1376,6 +1442,18 @@ export function renderReviewHtml(review) {
           </div>
           <details id="synthesis" class="secondary-details map-connections"><summary>${ui.behavior.connectionsSummary}</summary><div id="synthesis-summary"></div><div id="synthesis-interactions" class="grid"></div><div id="synthesis-evidence"></div></details>
         </div>
+        <aside id="review-focus" class="review-focus-panel" aria-labelledby="review-focus-heading">
+          <h3 id="review-focus-heading">${ui.focus.heading}</h3>
+          <p class="muted focus-intro">${ui.focus.intro}</p>
+          <div class="attention-grid">
+            <article class="attention-panel"><h4>${ui.focus.risks}</h4><div id="risk-content"></div></article>
+            <article class="attention-panel"><h4>${ui.focus.verification}</h4><ul id="verification-content"></ul></article>
+          </div>
+          <h4>${ui.focus.questions}</h4>
+          <div id="question-content" class="grid"></div>
+          <details class="secondary-details"><summary>${ui.focus.more}</summary><h4>${ui.focus.invariants}</h4><div id="invariant-content"></div><h4>${ui.focus.decisions}</h4><div id="decision-content" class="grid"></div></details>
+          <div id="focus-evidence"></div>
+        </aside>
       </section>
       <section id="literate-diff" class="chapter chapter-code" aria-labelledby="literate-heading">
         <div class="chapter-head"><span class="chapter-number">03</span><div><p class="chapter-kicker">${ui.code.eyebrow}</p><h2 id="literate-heading">${ui.code.heading}</h2><p class="chapter-intro">${ui.code.help}</p></div></div>
@@ -1385,17 +1463,17 @@ export function renderReviewHtml(review) {
         <div class="chapter-head"><span class="chapter-number">04</span><div><p class="chapter-kicker">${ui.microworld.eyebrow}</p><h2 id="microworld-heading">${ui.microworld.heading}</h2></div></div>
         <div class="chapter-surface lab-grid">
           <div class="lab-controls"><h3 id="microworld-title"></h3><p class="notice">${ui.microworld.notice}</p><p id="microworld-instructions"></p><div id="microworld-evidence"></div><div id="microworld-controls" class="controls"></div></div>
-          <div><p id="scenario-status" class="sr-only" role="status" aria-live="polite"></p><div id="scenario-view" class="lab-canvas" role="region" aria-label="${ui.microworld.regionLabel}"></div></div>
+          <div><p id="scenario-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></p><div id="scenario-view" class="lab-canvas" role="region" aria-label="${ui.microworld.regionLabel}"></div></div>
         </div>
       </section>
       <section id="quiz" class="chapter chapter-quiz" aria-labelledby="quiz-heading">
         <div class="chapter-head"><span class="chapter-number">05</span><div><p class="chapter-kicker">${ui.quiz.eyebrow}</p><h2 id="quiz-heading">${ui.quiz.heading}</h2><p class="chapter-intro">${ui.quiz.help}</p></div></div>
         <div class="chapter-surface">
           <div class="quiz-progress"><span id="quiz-progress-label"></span></div>
-          <div id="quiz-progress-track" class="quiz-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="quiz-progress-bar"></span></div>
+          <div id="quiz-progress-track" class="quiz-track" role="progressbar" aria-labelledby="quiz-progress-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="quiz-progress-bar"></span></div>
+          <p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1" hidden></p>
           <form id="quiz-form"></form>
           <div id="quiz-evidence"></div>
-          <p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1"></p>
         </div>
       </section>
       <section id="evidence" class="chapter chapter-evidence" aria-labelledby="evidence-heading">

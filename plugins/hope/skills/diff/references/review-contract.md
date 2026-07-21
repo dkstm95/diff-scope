@@ -42,18 +42,18 @@ The HTML presents information in human-review order with progressive
 disclosure:
 
 1. a short localized review title, the linked original pull request title, a
-   short explanation, compact trust facts, and any partial-coverage warning;
-2. the few observable changes and one useful visual, with background and
-   before/after detail collapsed;
-3. collapsed behavior flows and a collapsed cross-flow synthesis, so the
-   reader has a minimal causal model of the change;
-4. unresolved questions and material risks, followed by collapsed invariants,
-   decisions, and verification limits;
-5. a collapsed selective code walkthrough and one central evidence index;
-6. an optional collapsed interactive model, a collapsed understanding check,
-   and optional project-knowledge candidates; and
-7. collapsed analysis details containing exact object IDs, fingerprint,
-   coverage dimensions, the complete file map, and processing metadata.
+   short explanation, compact trust facts, any partial-coverage warning, and a
+   few observable changes, with background and before/after detail collapsed;
+2. a system map with a useful visual when needed, behavior flows, cross-flow
+   synthesis, unresolved questions, material risks, and collapsed review
+   details;
+3. a selective code walkthrough ordered by behavior rather than file name;
+4. an optional microworld in its own chapter;
+5. one understanding quiz in its own chapter; and
+6. one evidence chapter with the central evidence index, optional
+   project-knowledge candidates, and collapsed analysis details. These details
+   include exact object IDs, fingerprint, coverage dimensions, the complete
+   file map, and processing metadata.
 
 Evidence remains available, but each excerpt is rendered once in the central
 index. Related sections and cards link to that entry instead of repeating the excerpt.
@@ -246,13 +246,22 @@ not a line-by-line restatement.
 
 Visuals use only these fixed kinds:
 
-- `before-after`;
-- `flow`; and
-- `decision-table`.
+- Use `before-after` for a state change.
+- Use `flow` for a sequence with no branches.
+- Use `decision-table` when conditions lead to different results.
+
+Never flatten an important branch into a linear `flow`. Use a
+`decision-table`, or explain the branch in prose, when the branch changes the
+result. Do not use a static visual and a microworld to teach the same
+relationship.
 
 The model supplies labels and declarative values only. The fixed renderer owns
 all HTML and CSS. A review may omit visuals, but it must state why. This keeps
 small changes simple while making omission a deliberate decision.
+
+Hope does not load external images or accept Mermaid, SVG, or other authored
+diagram code. Add a new fixed visual kind only after real reviews show a
+different learning need.
 
 ## Interactive model, understanding check, and project knowledge
 
@@ -266,9 +275,10 @@ The review then contains one global quiz with three to five evidence-backed
 questions for the whole change. It includes at least one prediction plus one
 invariant or risk question. Single-answer questions have exactly one answer;
 all references and option IDs are validated. Hope does not create one quiz per
-pass or workstream. Distractors are plausible alternatives and questions should
-require applying the behavior, not merely recalling a path or rejecting an
-absurd option. Multiple-answer questions identify themselves in visible text.
+pass or workstream. Prefer asking what happens for a new input over asking for
+a name or path. Distractors are plausible alternatives. Questions require
+applying the behavior, not rejecting an absurd option. Multiple-answer
+questions identify themselves in visible text.
 
 SSOT candidates are proposals only. They preserve only durable knowledge that
 is hard to recover from code and Git, target an existing project owner such as
