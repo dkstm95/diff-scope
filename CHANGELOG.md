@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.0-alpha - 2026-07-21
+
+Hope keeps its useful plugin surface while starting the internal harness.
+
+- Keep `$hope:diff` as a public skill and route it through one small command
+  surface: start, inspect, validate, render, status, and abandon.
+- Let `$hope:diff` with no URL select the most recently created PR in the
+  current GitHub repository. Keep an explicit URL as the override and ask for
+  one when no repository or PR can be found.
+- Add a private, revisioned `DiffRun` so workflow status and output ownership no
+  longer live only in AI instructions.
+- Add `$hope:cleanup` with a non-destructive preview, a short-lived exact plan,
+  explicit confirmation, and a final identity check before deletion.
+- Let cleanup remove Hope-managed temporary reviews and completed or cancelled
+  diff run records. Keep exports, active runs, project files, worktrees, and
+  branches outside its scope.
+- Stage explicit HTML exports privately and publish them only after the final
+  pull request snapshot check.
+- Keep a successful review or export successful when later temporary-file
+  cleanup or run bookkeeping fails, and report the remaining cleanup work.
+- Add shared private-file checks only after both diff and cleanup need them.
+  Keep feature names such as `DiffRun` and `CleanupPlan` instead of introducing
+  a generic runner framework.
+- Document the two-track structure: a stable plugin entry today and one shared
+  harness core that can later serve other hosts and standalone commands.
+
 ## 0.3.2-alpha - 2026-07-19
 
 - Make the review scope explicit: Hope uses changed code hunks, the PR

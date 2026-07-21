@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 
 import {
+  publishReviewExport,
   renderReviewHtml,
   serializeReviewForHtml,
   writeReviewHtml,
@@ -765,19 +766,21 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /Hope · diff/);
   assert.match(first, /<html lang="ko">/u);
   assert.match(first, /<title>Hope 리뷰<\/title>/u);
-  assert.match(first, /<h2 id="overview-heading">무엇이 바뀌었나<\/h2>/u);
-  assert.match(first, /<h2 id="review-focus-heading">확인할 점<\/h2>/u);
-  assert.match(first, /<h2 id="workstream-heading">어떻게 동작하나<\/h2>/u);
-  assert.match(first, /<h2 id="literate-heading">코드로 확인하기<\/h2>/u);
-  assert.match(first, /<h2 id="microworld-heading">동작 실험<\/h2>/u);
+  assert.match(first, /<h2 id="overview-heading">무엇이 왜 바뀌었나<\/h2>/u);
+  assert.match(first, /<h3 id="review-focus-heading">넘어가기 전에 확인할 것<\/h3>/u);
+  assert.match(first, /<h2 id="workstream-heading">시스템 지도<\/h2>/u);
+  assert.match(first, /<h2 id="literate-heading">코드 따라가기<\/h2>/u);
+  assert.match(first, /<h2 id="microworld-heading">마이크로월드<\/h2>/u);
   assert.match(first, /<h2 id="quiz-heading">이해 확인<\/h2>/u);
-  assert.match(first, /<h2 id="details-heading">분석 세부 정보<\/h2>/u);
-  assert.match(first, /class="technical-details"><summary>분석한 PR 버전과 세부 정보 보기<\/summary>/u);
+  assert.match(first, /<h2 id="evidence-heading">근거와 원본<\/h2>/u);
+  assert.match(first, /id="details-heading" class="summary-title">분석 세부 정보<\/span>/u);
+  assert.match(first, /class="summary-copy">분석한 PR 버전과 세부 정보 보기<\/span>/u);
   assert.match(first, /"observed":"변경 내용에서 확인"/u);
   assert.match(first, /"not-run":"실행 안 함"/u);
   assert.match(first, /"generated-or-lockfile":"생성\/잠금 파일"/u);
-  assert.doesNotMatch(first, /id="workstream-navigation"/);
-  assert.match(first, /element\("details", undefined, "card disclosure-card workstream-card"\)/u);
+  assert.match(first, /id="workstream-content" class="system-map-list" role="tablist"/u);
+  assert.match(first, /element\("button", undefined, "map-node"\)/u);
+  assert.match(first, /id="workstream-detail-panel" class="system-map-detail" role="tabpanel"/u);
   assert.match(first, /workstreamTarget/);
   assert.match(first, /return "workstream-card-" \+ id/u);
   assert.match(first, /synthesis-interactions/);
@@ -785,8 +788,10 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /Merge-base SHA/);
   assert.match(first, /Head SHA/);
   assert.match(first, /PR 제목/);
-  const header = first.slice(first.indexOf("<header>"), first.indexOf("</header>"));
+  const header = first.slice(first.indexOf('<header class="review-cover">'), first.indexOf("</header>"));
   assert.match(header, /id="review-context"/u);
+  assert.match(header, /<details class="scope-details">/u);
+  assert.match(header, /<summary>Hope가 확인한 범위<\/summary>/u);
   assert.doesNotMatch(header, /Base SHA|Merge-base SHA|Head SHA|Fingerprint|검증 ID/u);
   const compactContextStart = first.indexOf("const compactValues = [");
   const compactContext = first.slice(compactContextStart, first.indexOf("];", compactContextStart) + 2);
@@ -794,15 +799,28 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.doesNotMatch(compactContext, /ui\.context\.(?:author|commits|files|changedLines)/u);
   const sectionOrder = [
     'id="overview"',
-    'id="workstreams"',
     'id="review-focus"',
+    'id="workstreams"',
     'id="literate-diff"',
     'id="microworld-section"',
     'id="quiz"',
+    'id="evidence"',
     'id="details"',
   ].map((marker) => first.indexOf(marker));
   assert.ok(sectionOrder.every((position) => position >= 0));
   assert.deepEqual(sectionOrder, [...sectionOrder].sort((left, right) => left - right));
+  const navigation = first.slice(first.indexOf('<nav class="section-nav"'), first.indexOf("</nav>"));
+  assert.equal(navigation.match(/<a /gu)?.length, 6);
+  assert.match(navigation, /변경[\s\S]*시스템 지도[\s\S]*코드 따라가기[\s\S]*마이크로월드[\s\S]*퀴즈[\s\S]*근거/u);
+  assert.match(navigation, /<span class="nav-number">01<\/span>/u);
+  assert.match(navigation, /<span class="nav-number">06<\/span>/u);
+  const optional = first.slice(first.indexOf('<section id="evidence"'), first.indexOf("</section>", first.indexOf('<section id="evidence"')));
+  assert.doesNotMatch(optional, /id="microworld-section"|id="quiz"/u);
+  const focus = first.slice(first.indexOf('<aside id="review-focus"'), first.indexOf("</aside>", first.indexOf('<aside id="review-focus"')));
+  assert.match(focus, /class="attention-grid"/u);
+  assert.ok(focus.indexOf('id="risk-content"') < focus.indexOf('id="verification-content"'));
+  assert.ok(focus.indexOf('id="verification-content"') < focus.indexOf('id="question-content"'));
+  assert.ok(focus.indexOf('id="verification-content"') < focus.indexOf('class="secondary-details"'));
   assert.match(first, /Content-Security-Policy/);
   assert.match(first, /default-src 'none'/);
   assert.match(first, /connect-src 'none'/);
@@ -819,20 +837,22 @@ test("renders deterministic offline HTML with inert untrusted text", async () =>
   assert.match(first, /selected\.size === expected\.size/);
   assert.match(first, /candidate\.when\.find/);
   assert.match(first, /이 실험은 설명을 돕는 예시이며 프로젝트 코드를 실행하지 않습니다/u);
-  assert.match(first, /id="quiz-disclosure"/u);
+  assert.doesNotMatch(first, /id="quiz-disclosure"/u);
+  assert.match(first, /id="quiz-progress-track" class="quiz-track" role="progressbar"/u);
   assert.match(first, /id="scenario-status" class="sr-only" role="status" aria-live="polite"/u);
   assert.match(first, /<th scope="col">경로<\/th>/u);
   assert.match(first, /min-height: 44px/u);
-  assert.match(first, /\.workstream-card \{ scroll-margin-top: 76px; \}/u);
-  assert.match(first, /@media \(max-width: 900px\)[\s\S]*\.workstream-card \{ scroll-margin-top: 18px; \}/u);
-  assert.match(first, /\.table-wrap:focus-visible,[^}]*\.quiz-question:focus,[^}]*\.result:focus \{ outline: 3px solid var\(--accent\)/u);
-  assert.match(first, /\.control \{[^}]*flex: 1 1 190px;[^}]*min-width: 0;[^}]*max-width: 100%;/u);
+  assert.match(first, /@media \(max-width: 940px\)[\s\S]*\.chapter, \.evidence-entry, \.optional-module, #review-focus \{ scroll-margin-top: 76px; \}/u);
+  assert.match(first, /\.table-wrap:focus-visible,[^}]*\.quiz-question:focus,[^}]*\.result:focus,[^}]*\.map-node:focus-visible \{ outline: 3px solid #5cc6a6/u);
+  assert.match(first, /\.control \{[^}]*display: grid;[^}]*min-width: 0;[^}]*max-width: 100%;/u);
   assert.match(first, /\.control select \{ width: 100%; min-width: 0; max-width: 100%; \}/u);
-  assert.match(first, /\.grid > \*, \.card, details, section, fieldset, \.table-wrap \{ min-width: 0; max-width: 100%; \}/u);
+  assert.match(first, /\.grid > \*, \.card, details, section, fieldset, \.table-wrap, \.optional-module, \.system-map-detail \{ min-width: 0; max-width: 100%; \}/u);
   assert.match(first, /fieldset \{ min-inline-size: 0;/u);
   assert.match(first, /\.choice > span \{ min-width: 0; overflow-wrap: anywhere; \}/u);
   assert.match(first, /\.table-wrap \{ width: 100%; max-width: 100%; overflow-x: auto;/u);
-  assert.match(first, /@media \(max-width: 400px\)[\s\S]*\.meta \{ grid-template-columns: 1fr; \}[\s\S]*\.compact-meta \{ grid-template-columns: 1fr; \}/u);
+  assert.match(first, /@media \(max-width: 640px\)[\s\S]*\.meta, \.compact-meta \{ grid-template-columns: 1fr; \}/u);
+  assert.match(first, /fieldset\.hidden = index !== 0/u);
+  assert.match(first, /button\.textContent = currentIndex === views\.length - 1 \? ui\.quiz\.finish : ui\.quiz\.next/u);
   assert.match(first, /document\.getElementById\("review-title"\)\.textContent = review\.title/u);
   assert.match(first, /id="review-source" target="_blank" rel="noreferrer noopener"/u);
   assert.match(first, /이 PR에서 바뀐 코드 부분만 확인했습니다/u);
@@ -878,13 +898,14 @@ test("renders the fixed interface in the selected language", async () => {
   const html = renderReviewHtml(review);
   assert.match(html, /<html lang="en">/u);
   assert.match(html, /<title>Hope Review<\/title>/u);
-  assert.match(html, /<h2 id="overview-heading">What changed<\/h2>/u);
-  assert.match(html, /<h2 id="review-focus-heading">What to verify<\/h2>/u);
-  assert.match(html, /<h2 id="workstream-heading">How it works<\/h2>/u);
-  assert.match(html, /<h2 id="microworld-heading">Try the behavior<\/h2>/u);
-  assert.match(html, /<h2 id="quiz-heading">Quiz<\/h2>/u);
-  assert.match(html, /<h2 id="literate-heading">Check the code<\/h2>/u);
-  assert.match(html, /<h2 id="details-heading">Analysis details<\/h2>/u);
+  assert.match(html, /<h2 id="overview-heading">What changed and why<\/h2>/u);
+  assert.match(html, /<h3 id="review-focus-heading">Before you move on<\/h3>/u);
+  assert.match(html, /<h2 id="workstream-heading">System map<\/h2>/u);
+  assert.match(html, /<h2 id="literate-heading">Follow the code<\/h2>/u);
+  assert.match(html, /<h2 id="microworld-heading">Microworld<\/h2>/u);
+  assert.match(html, /<h2 id="quiz-heading">Check your understanding<\/h2>/u);
+  assert.match(html, /<h2 id="evidence-heading">Evidence and original<\/h2>/u);
+  assert.match(html, /id="details-heading" class="summary-title">Analysis details<\/span>/u);
   assert.match(html, /Hope checked only the changed parts shown in this PR's diff/u);
   assert.match(html, /Show evidence \(\{count\}\)/u);
   assert.doesNotMatch(html, /question\(s\)|evidence link\(s\)/u);
@@ -973,6 +994,29 @@ test("writes an explicit new HTML file without overwriting existing paths", asyn
     }),
     /symlink output parent/,
   );
+});
+
+test("keeps a published export successful when private stage cleanup fails", async (t) => {
+  const review = await fixture();
+  const context = changeRequestForReview(review);
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "hope-stage-root-"));
+  const exportRoot = await mkdtemp(join(tmpdir(), "hope-export-root-"));
+  t.after(async () => await rm(temporaryRoot, { recursive: true, force: true }));
+  t.after(async () => await rm(exportRoot, { recursive: true, force: true }));
+  const staged = await writeReviewHtml(review, { changeRequest: context, temporaryRoot });
+  const output = join(exportRoot, "review.html");
+
+  const result = await publishReviewExport(staged.file, output, {
+    temporaryRoot,
+    removeStage: async () => {
+      throw new Error("simulated stage cleanup failure");
+    },
+  });
+
+  assert.deepEqual(result, { file: output, eligibleAfter: null, cleanupPending: true });
+  assert.equal((await lstat(output)).isFile(), true);
+  assert.equal((await lstat(staged.file)).isFile(), true);
+  assert.doesNotMatch(await readFile(output, "utf8"), /Hope-managed temporary review/u);
 });
 
 test("a later default render removes an eligible managed review", async (t) => {

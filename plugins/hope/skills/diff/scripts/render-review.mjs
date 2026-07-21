@@ -16,7 +16,10 @@ import {
   readCurrentSnapshot,
   validateChangeRequest,
 } from "./collect-change-request.mjs";
-import { writeReviewHtml } from "./lib/render-review.mjs";
+import {
+  publishReviewExport,
+  writeReviewHtml,
+} from "./lib/render-review.mjs";
 import {
   MAX_REVIEW_MODEL_BYTES,
   validateReviewAgainstChangeRequest,
@@ -32,6 +35,12 @@ export function formatRenderPath(result) {
 export function formatRetentionHandoff(result) {
   return typeof result.eligibleAfter === "string"
     ? `Hope retention: eligibleAfter=${result.eligibleAfter}\n`
+    : "";
+}
+
+export function formatCleanupHandoff(result) {
+  return result?.cleanupPending
+    ? "Hope cleanup: some private temporary files remain and can be removed with $hope:cleanup.\n"
     : "";
 }
 
@@ -341,6 +350,8 @@ export async function main(
   const collect = dependencies.collectChangeRequest ?? collectChangeRequest;
   const currentSnapshot = dependencies.readCurrentSnapshot ?? readCurrentSnapshot;
   const write = dependencies.writeReviewHtml ?? writeReviewHtml;
+  const publishExport = dependencies.publishReviewExport ?? publishReviewExport;
+  const cleanupInputs = dependencies.cleanupTransientInputs ?? cleanupTransientInputs;
   let result;
   let primaryError;
   let preserveInputs = false;
@@ -380,16 +391,13 @@ export async function main(
     const liveContext = assertLiveChangeRequestMatches(storedContext, collectedContext);
     validateReviewAgainstChangeRequest(review, liveContext);
 
-    result = await write(review, {
-      changeRequest: liveContext,
-      outputFile: parsed.output,
-    });
+    result = await write(review, { changeRequest: liveContext });
 
     try {
       const finalSnapshot = await currentSnapshot({ url: storedContext.url });
       assertSameSnapshot(liveContext, finalSnapshot);
     } catch (error) {
-      await removeFailedOutput(result, parsed.output);
+      await removeFailedOutput(result, undefined);
       result = undefined;
       if (error instanceof SnapshotChangedError || error?.code === "stale") {
         throw new Error(
@@ -410,13 +418,17 @@ export async function main(
       );
     }
 
+    if (parsed.output !== undefined) {
+      result = await publishExport(result.file, parsed.output);
+    }
+
   } catch (error) {
     primaryError = error;
   }
 
   try {
     if (parsed.cleanup && !preserveInputs) {
-      await cleanupTransientInputs([parsed.input, parsed.context]);
+      await cleanupInputs([parsed.input, parsed.context]);
     }
   } catch (cleanupError) {
     if (primaryError) {
@@ -426,6 +438,8 @@ export async function main(
         enumerable: false,
         value: cleanupError,
       });
+    } else if (result) {
+      result = { ...result, cleanupPending: true };
     } else {
       primaryError = cleanupError;
     }
@@ -437,6 +451,7 @@ export async function main(
 
   process.stdout.write(formatRenderPath(result));
   process.stderr.write(formatRetentionHandoff(result));
+  process.stderr.write(formatCleanupHandoff(result));
   return result;
 }
 

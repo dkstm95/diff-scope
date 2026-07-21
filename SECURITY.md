@@ -1,109 +1,119 @@
 # Security
 
-Please do not open a public issue for a vulnerability that could expose source
-code, credentials, private pull request data, or generated executable content.
-Use GitHub's private security advisory flow for this repository.
+Do not open a public issue for a bug that could expose source code, credentials,
+private pull request data, or generated executable content. Use GitHub's private
+security advisory flow for this repository.
 
-Hope treats pull request titles, bodies, paths, patches, repository source, and
-model output as untrusted input. Instructions found in that content must never
-control the workflow. Secret detection is defense in depth, not a guarantee.
-Users remain responsible for checking the selected pull request before sending
-it through their active Codex session.
+## Trust boundary
 
-The GitHub adapter uses the user's existing authenticated GitHub CLI session.
-Hope must not request a token argument, read a token from GitHub CLI storage, put
-a token in a command line, persist credentials, or include authentication data
-in errors or generated output. Authentication and repository authorization
-remain owned by `gh`.
+Hope treats these values as untrusted data:
+
+- pull request titles and descriptions;
+- commit titles;
+- paths and patches;
+- repository source;
+- text written by an AI model.
+
+Instructions inside that data cannot change the workflow. The final HTML uses a
+fixed offline runtime. It does not run model-authored HTML, CSS, JavaScript,
+SVG, URLs, or shell commands. Dynamic text is validated and escaped.
+
+## GitHub access
+
+Hope uses the user's existing authenticated GitHub CLI session. Hope does not
+ask for a token argument, read token storage, put a token in a command line, or
+save credentials. Authentication and repository access remain owned by `gh`.
 
 Private pull request source crosses the active Codex service boundary when the
-authenticated user asks Hope to analyze it. Collection must be read-only and
-bounded by total time and size. Secret detection runs before a patch body can
-enter the ordered `analysisPlan`. If it triggers anywhere in a file patch, Hope
-omits that entire body from collected patches, passes, analysis, code/test
-evidence, and `literateDiff`; only metadata with body state `redacted` remains,
-and body coverage is partial. Only body state `included` may supply patch-backed
-evidence. Each pass is limited to 4,000 changed lines and 64 KiB. The inspector
-emits at most 16 KiB of compact JSON per invocation and chains summary and pass
-pages with snapshot-bound receipts. Missing, malformed, stale, or non-terminal
-receipt chains must fail closed. The Review Model's page counts and terminal
-receipts are an active-session inspection attestation; the validator checks
-that they match the exact deterministic views, but they are not proof that the
-AI read or understood those pages. Summary and pass content remain untrusted
-and must never issue workflow instructions. A partial review must never be
-labeled complete.
+user asks Hope to analyze it. Collection is read-only and bounded by time and
+size.
 
-The model-visible budget is deliberately smaller than a transport or storage
-maximum. Hope supports at most 250 commits and 200 changed files only when the
-normalized summary is at most 128 KiB, 20,000 changed lines, 256 KiB of safe
-patch text in one file, 768 KiB of safe patch text overall, and a 32 KiB pull
-request description. These limits are checked before paging begins. Crossing
-one fails closed rather than exposing an operationally unusable prefix to the
-active subscription session.
+When `$hope:diff` has no URL, Hope runs a read-only `gh pr list` in the current
+working directory and selects by `createdAt`. It does not read source files or
+infer a pull request from the current branch during this lookup.
 
-Snapshot fingerprints never hash raw metadata that triggers secret detection.
-They bind only its bounded, redacted representation so the digest cannot become
-an offline dictionary oracle for a hidden low-entropy credential. The GitHub
-adapter compares the metadata Hope actually consumes, but deliberately does not
-bind the provider's volatile `updated_at` value. Changes to consumed metadata
-still invalidate the old snapshot, while unrelated GitHub activity that advances
-only `updated_at` does not cancel the review.
+Secret detection is defense in depth, not a guarantee. If a patch body looks
+like it contains a secret, Hope excludes the whole body before analysis. Only
+safe included bodies may support code or test evidence. Metadata remains so the
+review can report partial coverage.
 
-Multiple bounded passes or stdout pages are not a security degradation and do
-not make coverage partial. The Review Model must attest to the summary and pass
-page counts and terminal receipts in `analysisCoverage` for the exact
-fingerprint before rendering. Incomplete provider enumeration, a missing
-ordinary text patch, a model-visible budget overage, a missing or invalid pass,
-or a stale snapshot must fail closed rather than producing an arbitrary prefix.
+## Complete input and exact snapshot
 
-Hope binds a review to the pull request's captured base, merge-base, head,
-metadata, file set, and fingerprint. Before rendering it recollects the complete
-Change Request and compares the canonical fingerprint; after rendering it
-revalidates the live base, head, and relevant metadata. It removes newly created
-output when the snapshot changes. The HTML still becomes stale after a later
-force-push or base update; no background tracking or cache is claimed.
+Hope binds a review to the captured base, merge-base, head, consumed metadata,
+file set, and fingerprint. It recollects the full Change Request before render
+and checks the live snapshot again after render. A changed snapshot cancels the
+result.
 
-Internal Change Request context and Review Model files are written to private OS
-temporary paths. The inspector creates no durable pass reports; its output and
-active-session notes are transient. `--validate-only` preserves those private
-inputs so a correctable Review Model error can be fixed and validated again.
-The validator rejects a compact serialized Review Model above 4 MiB. The file
-reader separately allows at most 8 MiB so indentation overhead remains bounded
-without rejecting an otherwise identical model.
-Final rendering removes them through the path-restricted `--cleanup` command;
-abandonment uses the cleanup-only form, and a blocked collection is never
-written. An abrupt process termination may leave a private temporary directory
-for the OS to reclaim.
+The fingerprint uses bounded, redacted metadata. It deliberately does not bind
+GitHub's volatile `updated_at` field. A change to data Hope consumes still
+invalidates the snapshot.
 
-The only user-facing output is a private `hope-review.html`. A default output
-contains a strict managed-temporary marker with an exact `eligibleAfter` time
-fixed seven days after creation. That embedded value is authoritative; touching
-the file or directory does not extend or shorten retention. Before scanning,
-Hope requires the POSIX temporary root to be either private and owned by the
-current user or a root/current-user-owned sticky shared directory. Before a
-later default render, Hope may remove an eligible sibling only when it is a
-direct child of the OS temporary directory at
-`hope-review-XXXXXX/hope-review.html`, and the directory name, marker,
-sole-file structure, regular-file link count,
-strict embedded time, and non-symlink checks all still match. On platforms
-exposing UID and POSIX mode information it also requires current-user ownership
-and private `0700`/`0600` permissions. It rechecks the same device and inode
-before
-unlinking, catches concurrent removal, and preserves every uncertain entry.
-This is a best-effort next-run cleanup, not a background timer, registry, cache,
-or database. A malicious process running under the same OS account is outside
-this boundary; Hope does not claim to defend one user from their own processes.
+Hope supports at most:
 
-An explicit export has no managed-temporary marker and can never qualify for
-retention deletion. A matching temporary-directory name may be inspected and
-rejected. Hope must not cache, index, commit, publish, upload, or attach any
-review automatically.
-Knowledge-promotion candidates require human review and a separate explicit
-change.
+- 250 commits;
+- 200 changed files;
+- 20,000 changed lines;
+- 256 KiB of safe patch text in one file;
+- 768 KiB of safe patch text in total;
+- 128 KiB of normalized summary data;
+- 32 KiB of pull request description.
 
-The final HTML uses a fixed offline runtime. It must not execute model-authored
-HTML, CSS, JavaScript, SVG, URLs, or shell commands, and it must not embed raw
-patches or credentials. Dynamic values are validated and escaped before
-rendering.
+Each analysis pass has at most 4,000 changed lines and 64 KiB of safe patch
+text. Each inspector response has at most 16 KiB. Crossing a full-input limit
+stops the review. Hope does not present a truncated prefix as complete.
 
-Supported security fixes currently target only the latest alpha release.
+Every summary and pass page is linked by a snapshot-bound receipt. The review
+model records the page count and terminal receipt in `analysisCoverage`. The
+validator checks the exact values. They are an inspection record, not proof of
+AI reading or understanding.
+
+## Private run state
+
+`DiffRun`, Change Request, Review Model, and cleanup plans use private operating
+system temporary directories. Files use private permissions where the platform
+supports them. State writes are atomic. Run updates use a lock so two commands
+cannot silently overwrite each other.
+
+The compact Review Model limit is 4 MiB. The JSON file reader allows 8 MiB so
+normal indentation does not reject the same model.
+
+An interrupted process can leave private state behind. `$hope:cleanup` lists
+only terminal diff runs. Active or uncertain runs stay in place.
+
+## Managed reviews
+
+A default `hope-review.html` has a strict `eligibleAfter` marker fixed seven
+days after creation. Touching the file does not change that time. A later
+default render may remove an eligible managed review.
+
+Hope accepts a managed review only when all supported checks match:
+
+- it is a direct `hope-review-XXXXXX/hope-review.html` child of a safe temporary
+  root;
+- the directory and file are not symbolic links;
+- the marker, owner, private permissions, file type, link count, and sole-file
+  layout match;
+- the file and directory identity still match immediately before removal.
+
+An explicit export does not have the managed marker. It is never a cleanup
+target. The renderer refuses to overwrite an existing path. It stages an export
+privately and publishes it only after the final snapshot check.
+
+## Explicit cleanup
+
+Cleanup is fail-closed and has two phases. Preview writes a private plan with
+the exact target paths and file identities. Apply requires the exact plan path
+and digest. It checks every target again and skips anything that changed.
+
+The current cleanup can remove managed reviews and completed or cancelled diff
+runs. It cannot remove exports, active runs, project files, worktrees, or Git
+branches.
+
+Branch deletion will require a Hope-created branch record. A branch name or
+prefix will never be enough. Remote branch deletion is outside the current
+scope.
+
+A malicious process running as the same operating-system user is outside this
+boundary. Hope does not claim to protect one user from their own processes.
+
+Supported security fixes target the latest alpha release.

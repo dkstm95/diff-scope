@@ -2,7 +2,15 @@ import { constants as fsConstants } from "node:fs";
 import { lstat, open, readdir, rmdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import process from "node:process";
+
+import {
+  currentUserId,
+  fileIdentity,
+  hasExactPermissions,
+  ownedByCurrentUser,
+  safeTemporaryRootStatus,
+  sameIdentity,
+} from "../../../../runtime/shared/private-files.mjs";
 
 export const DEFAULT_REVIEW_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 
@@ -13,20 +21,8 @@ const MANAGED_REVIEW_MARKER_BYTES = Buffer.byteLength(
   "<!-- Hope-managed temporary review; eligibleAfter=2000-01-01T00:00:00.000Z -->\n",
 );
 
-function posixMode(status) {
-  return status.mode & 0o777;
-}
-
 function sameFile(first, second) {
   return first.dev === second.dev && first.ino === second.ino;
-}
-
-function ownedByCurrentUser(status, currentUid) {
-  return currentUid === undefined || status.uid === currentUid;
-}
-
-function hasExpectedPermissions(status, expectedMode) {
-  return process.platform === "win32" || posixMode(status) === expectedMode;
 }
 
 function strictIsoTimestamp(value) {
@@ -60,20 +56,6 @@ export function parseManagedReviewMarker(value) {
   return match === null ? undefined : strictIsoTimestamp(match[1]);
 }
 
-function safePosixTemporaryRoot(status, currentUid) {
-  if (process.platform === "win32") return true;
-  const mode = status.mode & 0o7777;
-  const privateCurrentUserRoot =
-    Number.isInteger(currentUid) &&
-    status.uid === currentUid &&
-    (mode & 0o077) === 0;
-  const stickySharedRoot =
-    (mode & 0o1000) !== 0 &&
-    (mode & 0o002) !== 0 &&
-    (status.uid === 0 || status.uid === currentUid);
-  return privateCurrentUserRoot || stickySharedRoot;
-}
-
 async function readManagedMarker(filePath, expectedStatus) {
   const noFollow = fsConstants.O_NOFOLLOW ?? 0;
   const handle = await open(filePath, fsConstants.O_RDONLY | noFollow);
@@ -96,7 +78,7 @@ async function inspectManagedReviewDirectory(directory, currentUid) {
     !directoryStatus.isDirectory() ||
     directoryStatus.isSymbolicLink() ||
     !ownedByCurrentUser(directoryStatus, currentUid) ||
-    !hasExpectedPermissions(directoryStatus, 0o700)
+    !hasExactPermissions(directoryStatus, 0o700)
   ) {
     return undefined;
   }
@@ -117,7 +99,7 @@ async function inspectManagedReviewDirectory(directory, currentUid) {
     !fileStatus.isFile() ||
     fileStatus.isSymbolicLink() ||
     !ownedByCurrentUser(fileStatus, currentUid) ||
-    !hasExpectedPermissions(fileStatus, 0o600) ||
+    !hasExactPermissions(fileStatus, 0o600) ||
     fileStatus.nlink !== 1 ||
     fileStatus.size < MANAGED_REVIEW_MARKER_BYTES
   ) {
@@ -164,34 +146,127 @@ async function removeIfStillEligible(candidate, nowMs, currentUid) {
   }
 }
 
+async function readManagedReviewRoot(temporaryRoot, currentUid) {
+  let rootStatus;
+  let entries;
+  try {
+    rootStatus = await safeTemporaryRootStatus(temporaryRoot, currentUid);
+    if (rootStatus === undefined) return undefined;
+    entries = await readdir(temporaryRoot, { withFileTypes: true });
+  } catch {
+    return undefined;
+  }
+  return { entries, rootStatus };
+}
+
+export async function listManagedReviews(options = {}) {
+  const temporaryRoot = resolve(options.temporaryRoot ?? tmpdir());
+  const currentUid = options.currentUid ??
+    currentUserId();
+  const root = await readManagedReviewRoot(temporaryRoot, currentUid);
+  if (root === undefined) return [];
+
+  const reviews = [];
+  for (const entry of root.entries) {
+    if (!REVIEW_DIRECTORY_PATTERN.test(entry.name) || !entry.isDirectory()) continue;
+    const directory = join(temporaryRoot, entry.name);
+    try {
+      const candidate = await inspectManagedReviewDirectory(directory, currentUid);
+      if (
+        candidate === undefined ||
+        dirname(candidate.directory) !== temporaryRoot ||
+        basename(candidate.directory) !== entry.name
+      ) {
+        continue;
+      }
+      reviews.push({
+        directory: candidate.directory,
+        directoryIdentity: fileIdentity(candidate.directoryStatus),
+        eligibleAfter: candidate.eligibleAfter,
+        file: candidate.file,
+        fileIdentity: fileIdentity(candidate.fileStatus),
+      });
+    } catch {
+      // Discovery is fail-closed. Uncertain entries are not cleanup targets.
+    }
+  }
+  return reviews.sort((first, second) => first.file.localeCompare(second.file));
+}
+
+export async function removeManagedReview(target, options = {}) {
+  const temporaryRoot = resolve(options.temporaryRoot ?? tmpdir());
+  const currentUid = options.currentUid ??
+    currentUserId();
+  if (target === null || typeof target !== "object") {
+    return { status: "skipped", reason: "invalid-target" };
+  }
+
+  const directory = resolve(String(target.directory ?? ""));
+  const file = resolve(String(target.file ?? ""));
+  if (
+    dirname(directory) !== temporaryRoot ||
+    !REVIEW_DIRECTORY_PATTERN.test(basename(directory)) ||
+    dirname(file) !== directory ||
+    basename(file) !== REVIEW_FILE_NAME
+  ) {
+    return { status: "skipped", reason: "outside-managed-root" };
+  }
+
+  let current;
+  try {
+    current = await inspectManagedReviewDirectory(directory, currentUid);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { status: "already-removed", reason: "missing" };
+    }
+    return { status: "skipped", reason: "inspection-failed" };
+  }
+  if (current === undefined) {
+    return { status: "skipped", reason: "not-managed" };
+  }
+  if (
+    current.file !== file ||
+    current.eligibleAfter !== target.eligibleAfter ||
+    !sameIdentity(current.directoryStatus, target.directoryIdentity) ||
+    !sameIdentity(current.fileStatus, target.fileIdentity)
+  ) {
+    return { status: "skipped", reason: "precondition-changed" };
+  }
+
+  try {
+    await unlink(current.file);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return { status: "already-removed", reason: "missing" };
+    }
+    return { status: "skipped", reason: "unlink-failed" };
+  }
+  try {
+    await rmdir(current.directory);
+    return { status: "removed", reason: null };
+  } catch (error) {
+    if (["ENOENT", "ENOTEMPTY", "EEXIST"].includes(error?.code)) {
+      return { status: "removed", reason: "directory-kept" };
+    }
+    return { status: "removed", reason: "directory-cleanup-failed" };
+  }
+}
+
 export async function cleanupExpiredDefaultReviews(options = {}) {
   const temporaryRoot = resolve(options.temporaryRoot ?? tmpdir());
   const nowMs = options.nowMs ?? Date.now();
   const currentUid = options.currentUid ??
-    (typeof process.getuid === "function" ? process.getuid() : undefined);
+    currentUserId();
 
   if (!Number.isFinite(nowMs)) {
     return { removedCount: 0 };
   }
 
-  let rootStatus;
-  let entries;
-  try {
-    rootStatus = await lstat(temporaryRoot);
-    if (
-      !rootStatus.isDirectory() ||
-      rootStatus.isSymbolicLink() ||
-      !safePosixTemporaryRoot(rootStatus, currentUid)
-    ) {
-      return { removedCount: 0 };
-    }
-    entries = await readdir(temporaryRoot, { withFileTypes: true });
-  } catch {
-    return { removedCount: 0 };
-  }
+  const root = await readManagedReviewRoot(temporaryRoot, currentUid);
+  if (root === undefined) return { removedCount: 0 };
 
   let removedCount = 0;
-  for (const entry of entries) {
+  for (const entry of root.entries) {
     if (!REVIEW_DIRECTORY_PATTERN.test(entry.name) || !entry.isDirectory()) continue;
     const directory = join(temporaryRoot, entry.name);
     try {
@@ -222,7 +297,7 @@ export async function defaultReviewEligibleAfter(filePath, options = {}) {
   ) {
     return undefined;
   }
-  const currentUid = typeof process.getuid === "function" ? process.getuid() : undefined;
+  const currentUid = currentUserId();
   const candidate = await inspectManagedReviewDirectory(directory, currentUid);
   return candidate?.eligibleAfter;
 }

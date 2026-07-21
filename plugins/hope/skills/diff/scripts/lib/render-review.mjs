@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { chmod, link, lstat, mkdtemp, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { chmod, link, lstat, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 
@@ -18,10 +18,10 @@ import {
 const REVIEW_STYLE = String.raw`:root {
   color-scheme: light;
   --ink: #17201d;
-  --muted: #5d6964;
-  --paper: #f4f3ed;
-  --panel: #fffdf7;
-  --line: #d7d8cf;
+  --muted: #65706b;
+  --paper: #f4f2eb;
+  --panel: #fffdf8;
+  --line: #d8d8cf;
   --accent: #12684f;
   --accent-soft: #def1e8;
   --declared: #315fa8;
@@ -36,139 +36,209 @@ const REVIEW_STYLE = String.raw`:root {
   font-synthesis: none;
 }
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body { margin: 0; color: var(--ink); background: var(--paper); line-height: 1.62; }
-header, main, footer { width: min(1040px, calc(100% - 32px)); margin-inline: auto; }
-header { padding: 48px 0 24px; }
-header p { max-width: 68ch; }
-main { display: grid; gap: 16px; padding-bottom: 48px; }
-section { border: 1px solid var(--line); border-radius: 16px; padding: clamp(20px, 3vw, 32px); background: var(--panel); box-shadow: 0 10px 28px rgba(28, 37, 33, .05); scroll-margin-top: 76px; }
-h1, h2, h3, h4 { line-height: 1.24; }
-h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.7rem); letter-spacing: -.045em; }
-h2 { margin-top: 0; font-size: clamp(1.4rem, 3vw, 2rem); }
+h1, h2, h3, h4 { line-height: 1.18; }
+h1 { margin: 0; max-width: 15ch; font-size: clamp(2.6rem, 7vw, 5.8rem); letter-spacing: -.06em; }
+h2 { margin: 0; max-width: 18ch; font-size: clamp(2rem, 4.5vw, 3.7rem); letter-spacing: -.045em; }
 h3 { margin-top: 28px; }
 h5 { font-size: 1rem; }
 p, li { max-width: 68ch; }
 h1, h2, h3, h4, h5, p, li, a, strong, summary, legend, label, dd, th, td { overflow-wrap: anywhere; }
 a { color: var(--accent); text-underline-offset: .18em; }
-.section-nav { display: flex; flex-wrap: nowrap; gap: 8px; width: min(1040px, calc(100% - 32px)); margin: 0 auto 16px; overflow-x: auto; padding-block: 8px; scrollbar-width: thin; }
-.section-nav a { display: inline-flex; flex: 0 0 auto; min-height: 44px; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 8px 13px; color: var(--accent); background: var(--panel); font-size: .9rem; font-weight: 750; text-decoration: none; }
-.section-nav a:hover { border-color: var(--accent); }
-.workstream-card { scroll-margin-top: 76px; }
-.inline-links { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
-.inline-links .label { color: var(--muted); font-weight: 750; }
+code { border-radius: 4px; padding: 2px 5px; background: #eeece4; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+button, select { min-height: 44px; max-width: 100%; border: 1px solid var(--muted); border-radius: 10px; padding: 10px 13px; color: var(--ink); background: #fff; font: inherit; }
+button { border-color: var(--accent); color: #fff; background: var(--accent); font-weight: 760; cursor: pointer; }
+button:hover { filter: brightness(.95); }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible, .table-wrap:focus-visible, .quiz-question:focus, .result:focus, .map-node:focus-visible { outline: 3px solid #5cc6a6; outline-offset: 3px; }
+[hidden] { display: none !important; }
+
+.review-cover { width: min(1180px, calc(100% - 40px)); margin-inline: auto; padding: clamp(48px, 8vw, 112px) 0 clamp(36px, 6vw, 72px); }
+.cover-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, .7fr); gap: clamp(32px, 7vw, 96px); align-items: end; }
+.cover-copy p { max-width: 62ch; }
+.cover-context { border-left: 1px solid var(--line); padding-left: 24px; }
+.lede { margin: 22px 0 14px; max-width: 56ch; font-size: clamp(1.12rem, 2vw, 1.4rem); }
+.review-source { margin: 0 0 18px; color: var(--muted); font-size: .94rem; }
+.review-focus-link { display: inline-flex; min-height: 44px; align-items: center; margin-top: 14px; border-radius: 999px; padding: 9px 14px; color: #fff; background: var(--accent); font-weight: 780; text-decoration: none; }
+.scope-details { margin-top: 14px; color: var(--muted); }
+.scope-details > summary { min-height: 44px; padding-block: 8px; cursor: pointer; font-weight: 750; }
+.scope-details > p { margin: 4px 0 0; }
+
+.article-shell { display: grid; grid-template-columns: 210px minmax(0, 920px); gap: clamp(24px, 5vw, 72px); width: min(1180px, calc(100% - 40px)); margin-inline: auto; align-items: start; }
+.section-nav { position: sticky; top: 18px; display: grid; gap: 4px; padding: 10px 0; }
+.section-nav a { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); gap: 8px; min-height: 44px; align-items: center; border-radius: 10px; padding: 7px 9px; color: var(--muted); font-size: .92rem; font-weight: 760; text-decoration: none; }
+.section-nav a:hover { color: var(--ink); background: rgba(255, 255, 255, .72); }
+.nav-number { color: #96a09b; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem; letter-spacing: .08em; }
+main { display: grid; gap: clamp(60px, 10vw, 120px); min-width: 0; padding-bottom: 96px; }
+.chapter { min-width: 0; max-width: 100%; scroll-margin-top: 24px; }
+.chapter-head { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: 14px; align-items: start; margin-bottom: 30px; }
+.chapter-number { display: grid; width: 2.4rem; height: 2.4rem; place-items: center; border: 1px solid currentColor; border-radius: 50%; color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; font-weight: 800; }
+.chapter-kicker { margin: 2px 0 7px; color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+.chapter-intro { margin: 12px 0 0; color: var(--muted); font-size: 1.05rem; }
+.chapter-surface { border: 1px solid var(--line); border-radius: 22px; padding: clamp(20px, 4vw, 40px); background: var(--panel); box-shadow: 0 16px 38px rgba(28, 37, 33, .055); }
+.chapter-overview .chapter-surface { background: #fffdf8; }
+.chapter-map .chapter-surface { border-color: #263b34; color: #eff7f3; background: #17251f; box-shadow: 0 22px 46px rgba(23, 37, 31, .18); }
+.chapter-code .chapter-surface { background: #fbfaf5; }
+.chapter-lab .chapter-surface { border-color: #bccbe3; background: #edf3fb; }
+.chapter-quiz .chapter-surface { border-color: #e5cfa8; background: #fff7e8; }
+.chapter-evidence .chapter-surface { background: #efeee8; }
+.chapter-map .chapter-surface .muted, .chapter-map .chapter-surface .evidence { color: #aebdb7; }
+.chapter-map #visual-content .card { color: var(--ink); }
+.chapter-map code { color: #eff7f3; background: #2a3a34; }
+
 .eyebrow { margin: 0 0 8px; color: var(--accent); font-size: .8rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.lede { font-size: 1.12rem; }
-.review-source { margin: -4px 0 18px; color: var(--muted); font-size: .94rem; }
 .muted { color: var(--muted); }
 .notice { border-left: 4px solid var(--warning); border-radius: 8px; padding: 13px 15px; color: var(--warning); background: var(--warning-soft); }
 .grid { display: grid; gap: 16px; }
-.grid > *, .card, details, section, fieldset, .table-wrap { min-width: 0; max-width: 100%; }
+.grid > *, .card, details, section, fieldset, .table-wrap, .optional-module, .system-map-detail { min-width: 0; max-width: 100%; }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
+.card { border: 1px solid var(--line); border-radius: 14px; padding: 18px; background: #fff; }
 .card > :first-child { margin-top: 0; }
 .card > :last-child { margin-bottom: 0; }
-.meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 18px 0; }
-.meta dt { color: var(--muted); font-size: .875rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 18px 0; }
+.meta dt { color: var(--muted); font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .meta dd { margin: 3px 0 0; overflow-wrap: anywhere; }
-.tag { display: inline-block; margin-right: 7px; border-radius: 999px; padding: 2px 9px; font-size: .875rem; font-weight: 800; text-transform: capitalize; background: var(--accent-soft); color: var(--accent); }
+.compact-meta { grid-template-columns: 1fr; margin-bottom: 0; }
+.compact-meta > div { border-top: 1px solid var(--line); padding-top: 10px; }
+.tag { display: inline-block; margin-right: 7px; border-radius: 999px; padding: 2px 9px; font-size: .82rem; font-weight: 800; text-transform: capitalize; background: var(--accent-soft); color: var(--accent); }
 .tag.declared { color: var(--declared); background: #e5edfb; }
 .tag.observed { color: var(--observed); background: #e3f2e9; }
 .tag.inferred { color: var(--inferred); background: #fff0ca; }
 .tag.unknown { color: var(--unknown); background: #fae6e2; }
-.claim { margin-block: 12px; }
-.claim p { margin: 6px 0; }
-.evidence { margin-top: 10px; color: var(--muted); }
+.claim { margin-block: 14px; }
+.claim p { margin: 7px 0; }
+.inline-links { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.inline-links .label { color: var(--muted); font-weight: 750; }
+.evidence { margin-top: 12px; color: var(--muted); }
 .evidence summary { min-height: 44px; padding-block: 8px; cursor: pointer; font-weight: 700; }
-.evidence ul { margin-bottom: 0; }
 .evidence-links { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
-.evidence-links .label { font-weight: 750; }
-.evidence-entry { scroll-margin-top: 76px; }
-.excerpt { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 18rem; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #f2f1eb; }
+.evidence-entry { scroll-margin-top: 24px; }
+.excerpt { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 22rem; overflow: auto; border: 1px solid var(--line); border-radius: 9px; padding: 14px; background: #e8e7e1; }
 .before-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .before-after h5, .before-after h6 { margin: 0 0 8px; }
+.overview-layout { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); gap: clamp(24px, 5vw, 48px); align-items: start; }
+#review-focus { border-left: 1px solid var(--line); padding-left: clamp(20px, 3vw, 32px); scroll-margin-top: 24px; }
+#review-focus h3:first-child { margin-top: 0; }
+.focus-intro { margin-top: -8px; }
+.attention-grid { display: grid; gap: 12px; }
+.attention-panel { border-top: 1px solid var(--line); padding-top: 10px; }
+.attention-panel > h4 { margin: 0; }
+.attention-panel > :last-child { margin-bottom: 0; }
+
 .visual-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; padding: 0; list-style: none; }
-.visual-flow li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; }
+.visual-flow li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; border: 1px solid #d7ddd9; border-radius: 12px; padding: 14px; color: var(--ink); background: #fff; }
 .flow-number { display: grid; width: 1.65rem; height: 1.65rem; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); font-size: .82rem; font-weight: 800; }
 .flow-copy { min-width: 0; }
 .flow-copy p { margin: 6px 0 0; }
+.system-map-layout { display: grid; grid-template-columns: minmax(210px, .8fr) minmax(0, 1.45fr); gap: 18px; margin-top: 24px; }
+.system-map-list { display: grid; align-content: start; gap: 8px; }
+.map-node { width: 100%; border-color: #486158; padding: 14px; color: #dbe9e4; background: #22332c; text-align: left; }
+.map-node .summary-title { color: inherit; }
+.map-node .summary-copy { color: #aebdb7; }
+.map-node[aria-selected="true"] { border-color: #70d4b5; color: #14221c; background: #70d4b5; }
+.map-node[aria-selected="true"] .summary-copy { color: #345348; }
+.system-map-detail { min-height: 360px; border-radius: 16px; padding: clamp(18px, 3vw, 28px); color: var(--ink); background: #f8faf8; }
+.system-map-detail > :first-child { margin-top: 0; }
+.system-map-detail .walkthrough-steps { padding: 0; list-style: none; }
+.walkthrough-steps li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 10px; margin: 18px 0; }
+.step-dot { display: grid; width: 1.7rem; height: 1.7rem; place-items: center; border-radius: 50%; color: #fff; background: var(--accent); font-size: .76rem; font-weight: 800; }
+.map-connections { margin-top: 22px; border-top: 1px solid #486158; padding-top: 18px; }
+.chapter-map .map-connections .card { border-color: #40534c; color: #e9f2ee; background: #22332c; }
+.chapter-map .map-connections .tag { color: #193228; background: #70d4b5; }
+.chapter-map .map-connections a { color: #8de0c5; }
+
+.code-walkthrough { display: grid; grid-template-columns: minmax(180px, .55fr) minmax(0, 1.45fr); gap: 24px; border-top: 1px solid var(--line); padding: 26px 0; }
+.code-walkthrough:first-child { border-top: 0; padding-top: 0; }
+.code-walkthrough:last-child { padding-bottom: 0; }
+.code-file h3 { margin: 0 0 8px; font-size: 1rem; }
+.code-file p { margin: 0; color: var(--muted); font-size: .92rem; }
+.literate-change { position: relative; border-left: 3px solid var(--accent); padding-left: 18px; margin: 0 0 24px; }
+.literate-change h4 { margin: 0 0 8px; }
+.literate-change:last-child { margin-bottom: 0; }
+.summary-title { display: block; color: var(--ink); font-size: 1.05rem; }
+.summary-copy { display: block; margin-top: 3px; color: var(--muted); font-size: .9rem; font-weight: 500; }
+
+.lab-grid { display: grid; grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr); gap: 24px; align-items: start; }
+.lab-controls { position: sticky; top: 18px; }
+.lab-controls h3 { margin-top: 0; }
+.controls { display: grid; gap: 14px; margin-block: 20px; }
+.control { display: grid; min-width: 0; max-width: 100%; gap: 5px; }
+.control label { font-weight: 700; }
+.control select { width: 100%; min-width: 0; max-width: 100%; }
+.lab-canvas { min-height: 360px; border: 1px solid #afc1dc; border-radius: 16px; padding: clamp(18px, 3vw, 28px); background: #fff; }
+.lab-canvas > h3 { margin-top: 0; }
+.trace ol { padding-left: 1.4rem; }
+.outcome { border-top: 1px solid var(--line); padding-top: 12px; font-weight: 700; }
+.lesson { border-left: 4px solid var(--accent); padding: 12px 16px; background: var(--accent-soft); }
+
+.quiz-progress { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 18px; color: var(--muted); font-size: .9rem; font-weight: 760; }
+.quiz-track { height: 5px; margin-bottom: 28px; overflow: hidden; border-radius: 999px; background: #eadfc9; }
+.quiz-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--inferred); transition: width .2s ease; }
+fieldset { min-inline-size: 0; margin: 0; border: 0; padding: 0; }
+legend { max-width: 100%; margin-bottom: 16px; padding: 0; font-size: clamp(1.25rem, 3vw, 1.75rem); font-weight: 780; line-height: 1.3; }
+.choice { display: flex; min-height: 52px; gap: 12px; align-items: flex-start; margin-block: 8px; border: 1px solid #dbc9a7; border-radius: 12px; padding: 12px; background: rgba(255, 255, 255, .72); cursor: pointer; }
+.choice:hover { border-color: var(--inferred); }
+.choice input { margin-top: .38rem; }
+.choice > span { min-width: 0; overflow-wrap: anywhere; }
+.quiz-actions { display: flex; justify-content: flex-end; margin-top: 22px; }
+.quiz-actions button { min-width: 150px; background: var(--inferred); border-color: var(--inferred); }
+.answer { margin: 18px 0 0; border-radius: 10px; padding: 13px 15px; background: #fffdf8; }
+.result { min-height: 1.6em; margin-top: 20px; font-weight: 760; }
+.correct { color: var(--success); }
+.incorrect { color: var(--danger); }
+
 .table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
 table { width: 100%; border-collapse: collapse; }
 th, td { border: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
-th { background: #f0efe8; }
+th { background: #e6e5de; }
 .decision-table { min-width: 36rem; }
-.flow { padding-left: 1.4rem; }
-.flow li { margin-block: 10px; }
 .file-map { min-width: 56rem; font-size: .92rem; }
 .file-map code { word-break: normal; overflow-wrap: anywhere; }
 .path-list { columns: 2 280px; }
 .path-list li { break-inside: avoid; margin-block: 5px; }
-.literate-change { border-left: 3px solid var(--accent); padding-left: 14px; margin-block: 18px; }
-fieldset { min-inline-size: 0; margin: 0 0 20px; border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-legend { max-width: 100%; padding: 0 8px; font-weight: 760; }
-.choice { display: flex; min-height: 44px; gap: 10px; align-items: flex-start; margin-block: 5px; padding: 9px 4px; cursor: pointer; }
-.choice input { margin-top: .38rem; }
-.choice > span { min-width: 0; overflow-wrap: anywhere; }
-button, select { min-height: 44px; max-width: 100%; border: 1px solid var(--muted); border-radius: 9px; padding: 10px 13px; color: var(--ink); background: #fff; font: inherit; }
-button { border-color: var(--accent); color: #fff; background: var(--accent); font-weight: 760; cursor: pointer; }
-button:hover { filter: brightness(.93); }
-button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible, .table-wrap:focus-visible, .quiz-question:focus, .result:focus { outline: 3px solid var(--accent); outline-offset: 3px; }
-.answer { margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: #f0efe9; }
-.result { min-height: 1.6em; margin-top: 14px; font-weight: 760; }
-.correct { color: var(--success); }
-.incorrect { color: var(--danger); }
-.controls { display: flex; flex-wrap: wrap; gap: 14px; margin-block: 20px; }
-.control { display: grid; flex: 1 1 190px; min-width: 0; max-width: 100%; gap: 5px; }
-.control label { font-weight: 700; }
-.control select { width: 100%; min-width: 0; max-width: 100%; }
-.trace ol { padding-left: 1.4rem; }
-.outcome { border-top: 1px solid var(--line); padding-top: 12px; font-weight: 700; }
-.lesson { border-left: 4px solid var(--accent); padding: 12px 16px; background: var(--accent-soft); }
-code { border-radius: 4px; padding: 2px 5px; background: #eeece4; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
-footer { padding: 0 0 40px; color: var(--muted); font-size: .9rem; }
-.compact-meta { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); margin-bottom: 0; }
-.compact-meta > div { border-top: 1px solid var(--line); padding-top: 10px; }
-.secondary-details, .disclosure-card, .section-disclosure { margin-top: 18px; }
-.secondary-details > summary, .disclosure-card > summary, .section-disclosure > summary { min-height: 44px; cursor: pointer; font-weight: 800; }
-.workstream-card > details > summary { min-height: 44px; padding-block: 8px; cursor: pointer; }
-.secondary-details[open] > summary, .disclosure-card[open] > summary, .section-disclosure[open] > summary { margin-bottom: 16px; }
-.summary-title { display: block; color: var(--ink); font-size: 1.05rem; }
-.summary-copy { display: block; margin-top: 3px; color: var(--muted); font-size: .92rem; font-weight: 500; }
-.section-disclosure { border-top: 1px solid var(--line); padding-top: 14px; }
-.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.optional-stack { display: grid; gap: 18px; margin-top: 22px; }
+.optional-module { border-top: 1px solid var(--line); padding-top: 18px; scroll-margin-top: 24px; }
+.optional-module > h3 { margin-top: 0; }
+.secondary-details, .disclosure-card { margin-top: 18px; }
+.secondary-details > summary, .disclosure-card > summary { min-height: 44px; cursor: pointer; font-weight: 800; }
+.secondary-details[open] > summary, .disclosure-card[open] > summary { margin-bottom: 16px; }
 .technical-details summary { min-height: 44px; padding-block: 8px; cursor: pointer; }
 .technical-details > summary { font-size: 1.15rem; font-weight: 800; }
 .technical-details[open] > summary { margin-bottom: 24px; }
 .technical-details .details-intro { margin-top: 0; }
-[hidden] { display: none !important; }
-@media (min-width: 901px) {
-  .section-nav { position: sticky; top: 0; z-index: 5; padding-block: 8px; background: var(--paper); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+footer { width: min(920px, calc(100% - 40px)); margin-inline: auto; padding: 0 0 44px; color: var(--muted); font-size: .9rem; }
+
+@media (max-width: 940px) {
+  .article-shell { grid-template-columns: 1fr; }
+  .section-nav { position: sticky; top: 0; z-index: 5; display: flex; overflow-x: auto; border-block: 1px solid var(--line); padding: 8px 0; background: rgba(244, 242, 235, .96); backdrop-filter: blur(12px); scrollbar-width: thin; }
+  .section-nav a { flex: 0 0 auto; grid-template-columns: auto auto; }
+  .chapter, .evidence-entry, .optional-module, #review-focus { scroll-margin-top: 76px; }
 }
-@media (max-width: 900px) {
-  section, .evidence-entry { scroll-margin-top: 18px; }
-  .workstream-card { scroll-margin-top: 18px; }
+@media (max-width: 760px) {
+  .review-cover, .article-shell { width: min(100% - 24px, 1180px); }
+  .cover-grid, .overview-layout, .system-map-layout, .code-walkthrough, .lab-grid { grid-template-columns: 1fr; }
+  .cover-context, #review-focus { border-left: 0; border-top: 1px solid var(--line); padding: 20px 0 0; }
+  .compact-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lab-controls { position: static; }
+  .system-map-detail, .lab-canvas { min-height: 0; }
 }
 @media (max-width: 640px) {
-  header, main, footer { width: min(100% - 20px, 1040px); }
-  header { padding-top: 34px; }
-  h1 { font-size: 2rem; }
-  h2 { font-size: 1.4rem; }
+  .review-cover { padding-top: 36px; }
+  h1 { font-size: clamp(2.4rem, 14vw, 4rem); }
+  h2 { font-size: clamp(1.9rem, 11vw, 3rem); }
   h3 { margin-top: 22px; }
-  section { border-radius: 12px; padding: 16px; scroll-margin-top: 18px; }
+  .article-shell { width: 100%; }
+  .section-nav { padding-inline: 10px; }
+  main { width: min(100% - 20px, 920px); margin-inline: auto; gap: 72px; }
+  .chapter-surface { border-radius: 16px; padding: 18px; }
+  .chapter-head { grid-template-columns: 2.4rem minmax(0, 1fr); }
   .card { padding: 14px; }
-  .section-nav { width: calc(100% - 20px); flex-wrap: wrap; overflow-x: visible; margin-bottom: 12px; }
-  .section-nav a { flex: 1 1 auto; justify-content: center; }
-  .before-after { grid-template-columns: 1fr; }
-  .meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .compact-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  th, td { padding: 8px; }
-}
-@media (max-width: 580px) {
-  .grid.two { grid-template-columns: 1fr; }
-}
-@media (max-width: 400px) {
-  .meta { grid-template-columns: 1fr; }
-  .compact-meta { grid-template-columns: 1fr; }
+  .before-after, .grid.two { grid-template-columns: 1fr; }
+  .meta, .compact-meta { grid-template-columns: 1fr; }
   .visual-flow { grid-template-columns: 1fr; }
+  th, td { padding: 8px; }
+  footer { width: calc(100% - 20px); }
 }`;
 
 const REVIEW_UI = {
@@ -176,15 +246,15 @@ const REVIEW_UI = {
     documentTitle: "Hope Review",
     reviewSections: "Review sections",
     nav: {
-      summary: "Summary",
-      behavior: "Flow",
+      summary: "Change",
       focus: "Checks",
       focusCount: "Checks ({count})",
-      focusDetails: "Checks: questions {questions}, risks {risks}",
-      code: "Code & evidence",
-      try: "Explore",
+      focusDetails: "Checks: questions {questions}, risks {risks}, unverified runs {verification}",
+      behavior: "System map",
+      code: "Code walkthrough",
+      try: "Microworld",
       quiz: "Quiz",
-      details: "Details",
+      optional: "Evidence",
     },
     context: {
       pr: "PR",
@@ -199,6 +269,7 @@ const REVIEW_UI = {
       coverage: "Changed code",
       verification: "Execution checks",
       verificationValue: "Tests and CI not checked",
+      scopeSummary: "What Hope checked",
       scopeBoundary: "Hope checked only the changed parts shown in this PR's diff. It also used the PR description and commit titles. Code outside those parts, PR discussion, review comments, and CI results were not included.",
       discussionCaution: "A question shown here may already have an answer in the PR discussion, which Hope did not collect.",
       partialNotice: "Changed code could not be inspected in {excluded} of {total} file(s). This review uses the {included} inspected file(s) only.",
@@ -249,7 +320,7 @@ const REVIEW_UI = {
     ssotTarget: { test: "Test", "code-comment": "Code comment", "architecture-doc": "Architecture document", "api-doc": "API document", runbook: "Runbook", "existing-project-ssot": "Existing project document" },
     overview: {
       eyebrow: "Start here",
-      heading: "What changed",
+      heading: "What changed and why",
       whyHeading: "Why this changed",
       noBackground: "No additional reason was needed to explain this change.",
       observableHeading: "Visible changes",
@@ -259,11 +330,11 @@ const REVIEW_UI = {
       after: "After",
       why: "Why",
     },
-    visual: { eyebrow: "Visual explanation", heading: "At a glance", case: "Case" },
+    visual: { eyebrow: "Visual explanation", heading: "Change at a glance", case: "Case" },
     behavior: {
       eyebrow: "Behavior",
-      heading: "How it works",
-      help: "Open only the flow you want to inspect.",
+      heading: "System map",
+      help: "Choose a change flow to see its steps and related files.",
       navigation: "Change flows",
       relatedPaths: "Related changed files",
       connectionsEyebrow: "Connections",
@@ -276,25 +347,31 @@ const REVIEW_UI = {
     },
     focus: {
       eyebrow: "Review focus",
-      heading: "What to verify",
+      heading: "Before you move on",
+      intro: "Start with risks, unanswered questions, and checks that Hope did not run.",
       invariants: "Must-hold conditions",
       risks: "Things to watch",
+      noRisks: "No specific risk was identified from the available evidence.",
       decisions: "Key design decisions",
       noDecisions: "No decision was stated strongly enough to preserve here.",
       tradeoff: "Trade-off",
       verification: "Check status",
       questions: "Questions that need an answer",
-      more: "Show conditions, design decisions, and check status",
+      more: "Show must-hold conditions and design decisions",
       noQuestions: "No unresolved questions were identified from the available evidence.",
     },
     code: {
       eyebrow: "Code evidence",
-      heading: "Check the code",
-      help: "Open a file only when you need implementation details. The full raw patch is not embedded.",
+      heading: "Follow the code",
+      help: "Read the changed files in execution order. Open evidence only when you need the exact source.",
+    },
+    optional: {
+      heading: "Evidence and original",
+      help: "Inspect source excerpts, changed files, scope, and the exact PR version behind this explanation.",
     },
     microworld: {
       eyebrow: "Explore",
-      heading: "Try the behavior",
+      heading: "Microworld",
       notice: "This is an explanation aid, not running project code.",
       noScenario: "No scenario matches this combination.",
       before: "Selected conditions",
@@ -304,11 +381,15 @@ const REVIEW_UI = {
     },
     quiz: {
       eyebrow: "Check yourself",
-      heading: "Quiz",
+      heading: "Check your understanding",
       help: "Use these questions to find gaps in your understanding. The score is not merge approval.",
       open: "Answer {count} questions",
       multiple: "Select all that apply",
       submit: "Check answers and show explanations",
+      progress: "Question {current} of {total}",
+      check: "Check answer",
+      next: "Next question",
+      finish: "Show result",
       correct: "Correct.",
       review: "Review this answer.",
       pass: "Passed",
@@ -369,15 +450,15 @@ const REVIEW_UI = {
     documentTitle: "Hope 리뷰",
     reviewSections: "리뷰 섹션",
     nav: {
-      summary: "요약",
-      behavior: "동작",
+      summary: "변경",
       focus: "확인",
       focusCount: "확인 ({count})",
-      focusDetails: "확인할 내용: 질문 {questions}개, 위험 {risks}개",
-      code: "코드·근거",
-      try: "실험",
+      focusDetails: "확인할 내용: 질문 {questions}개, 위험 {risks}개, 미확인 실행 {verification}개",
+      behavior: "시스템 지도",
+      code: "코드 따라가기",
+      try: "마이크로월드",
       quiz: "퀴즈",
-      details: "세부",
+      optional: "근거",
     },
     context: {
       pr: "PR",
@@ -392,6 +473,7 @@ const REVIEW_UI = {
       coverage: "변경 코드",
       verification: "실행 검증",
       verificationValue: "테스트·CI 미확인",
+      scopeSummary: "Hope가 확인한 범위",
       scopeBoundary: "이 PR에서 바뀐 코드 부분만 확인했습니다. PR 설명과 커밋 제목도 근거로 사용했습니다. 바뀐 부분 밖의 코드, PR 토론·리뷰 댓글·CI 결과는 포함하지 않았습니다.",
       discussionCaution: "여기에 나온 질문은 Hope가 수집하지 않은 PR 토론에서 이미 답변됐을 수 있습니다.",
       partialNotice: "전체 {total}개 중 {excluded}개 파일은 변경 코드를 확인하지 못했습니다. 이 리뷰는 확인한 {included}개 파일만 근거로 작성했습니다.",
@@ -442,7 +524,7 @@ const REVIEW_UI = {
     ssotTarget: { test: "테스트", "code-comment": "코드 주석", "architecture-doc": "아키텍처 문서", "api-doc": "API 문서", runbook: "운영 문서", "existing-project-ssot": "기존 프로젝트 문서" },
     overview: {
       eyebrow: "먼저 볼 내용",
-      heading: "무엇이 바뀌었나",
+      heading: "무엇이 왜 바뀌었나",
       whyHeading: "왜 바뀌었나",
       noBackground: "이 변경을 설명하는 데 추가 배경은 필요하지 않습니다.",
       observableHeading: "눈에 보이는 변화",
@@ -452,11 +534,11 @@ const REVIEW_UI = {
       after: "변경 후",
       why: "이유",
     },
-    visual: { eyebrow: "시각적 설명", heading: "한눈에 보기", case: "상황" },
+    visual: { eyebrow: "시각적 설명", heading: "변경을 한눈에 보기", case: "상황" },
     behavior: {
       eyebrow: "동작",
-      heading: "어떻게 동작하나",
-      help: "궁금한 흐름만 펼쳐서 확인하세요.",
+      heading: "시스템 지도",
+      help: "변경 흐름을 선택하면 단계와 관련 파일을 볼 수 있습니다.",
       navigation: "변경 흐름",
       relatedPaths: "관련 변경 파일",
       connectionsEyebrow: "연결 관계",
@@ -469,25 +551,31 @@ const REVIEW_UI = {
     },
     focus: {
       eyebrow: "리뷰할 내용",
-      heading: "확인할 점",
+      heading: "넘어가기 전에 확인할 것",
+      intro: "위험, 답이 필요한 질문, Hope가 실행하지 않은 검증부터 확인하세요.",
       invariants: "반드시 지켜야 할 조건",
       risks: "주의할 점",
+      noRisks: "현재 근거에서는 특별히 주의할 위험이 발견되지 않았습니다.",
       decisions: "주요 설계 결정",
       noDecisions: "여기에 남길 만큼 명확한 결정은 확인되지 않았습니다.",
       tradeoff: "감수한 점",
       verification: "확인 상태",
       questions: "확인이 필요한 질문",
-      more: "조건, 설계 결정, 확인 상태 보기",
+      more: "반드시 지켜야 할 조건과 설계 결정 보기",
       noQuestions: "현재 근거에서는 추가로 확인할 질문이 발견되지 않았습니다.",
     },
     code: {
       eyebrow: "코드 근거",
-      heading: "코드로 확인하기",
-      help: "구현이 궁금한 파일만 펼쳐보세요. 전체 변경 코드는 포함하지 않습니다.",
+      heading: "코드 따라가기",
+      help: "파일 목록보다 실행 흐름을 따라 읽습니다. 정확한 원문이 필요할 때만 근거를 여세요.",
+    },
+    optional: {
+      heading: "근거와 원본",
+      help: "이 설명의 소스 원문, 변경 파일, 분석 범위와 정확한 PR 버전을 확인합니다.",
     },
     microworld: {
       eyebrow: "직접 살펴보기",
-      heading: "동작 실험",
+      heading: "마이크로월드",
       notice: "이 실험은 설명을 돕는 예시이며 프로젝트 코드를 실행하지 않습니다.",
       noScenario: "이 조합에 맞는 시나리오가 없습니다.",
       before: "선택한 조건",
@@ -502,6 +590,10 @@ const REVIEW_UI = {
       open: "{count}개 질문 풀기",
       multiple: "해당 항목을 모두 고르세요",
       submit: "정답과 설명 확인",
+      progress: "{total}개 중 {current}번째 질문",
+      check: "정답 확인",
+      next: "다음 질문",
+      finish: "결과 보기",
       correct: "맞았습니다.",
       review: "이 답을 다시 살펴보세요.",
       pass: "기준 통과",
@@ -574,6 +666,7 @@ review.changeRequest.analysisPlan.passes.forEach(function (pass) {
   });
 });
 const workstreamById = new Map(review.workstreams.map(function (workstream) { return [workstream.id, workstream]; }));
+const workstreamButtonById = new Map();
 const workstreamIdsByPath = new Map();
 review.workstreams.forEach(function (workstream) {
   workstream.paths.forEach(function (path) {
@@ -718,12 +811,14 @@ function renderReviewContext() {
   source.href = change.url;
   document.getElementById("scope-boundary").textContent = ui.context.scopeBoundary;
   const focusLink = document.getElementById("focus-nav-link");
+  const unverifiedCount = review.verification.filter(function (entry) { return entry.status === "not-run" || entry.status === "unknown"; }).length;
   focusLink.textContent = format(ui.nav.focusCount, {
-    count: review.authorQuestions.length + review.risks.length,
+    count: review.authorQuestions.length + review.risks.length + unverifiedCount,
   });
   focusLink.setAttribute("aria-label", format(ui.nav.focusDetails, {
     questions: review.authorQuestions.length,
     risks: review.risks.length,
+    verification: unverifiedCount,
   }));
 
   const compactValues = [
@@ -892,29 +987,81 @@ function renderVisuals() {
 
 function renderWorkstreams() {
   const content = document.getElementById("workstream-content");
-  review.workstreams.forEach(function (workstream) {
-    const article = element("details", undefined, "card disclosure-card workstream-card");
-    article.id = workstreamTarget(workstream.id);
-    const summary = element("summary");
-    summary.append(element("span", workstream.title, "summary-title"), element("span", workstream.summary, "summary-copy"));
-    article.append(summary);
+  const detail = document.getElementById("workstream-detail-panel");
+
+  function activateWorkstream(workstream, button) {
+    workstreamButtonById.forEach(function (candidate) {
+      candidate.setAttribute("aria-selected", String(candidate === button));
+      candidate.tabIndex = candidate === button ? 0 : -1;
+    });
+    detail.setAttribute("aria-labelledby", button.id);
+    detail.textContent = "";
+    heading(detail, 3, workstream.title);
+    detail.append(element("p", workstream.summary));
     const paths = element("details");
     paths.append(element("summary", ui.behavior.relatedPaths + " (" + String(workstream.paths.length) + ")"));
     const pathList = element("ul", undefined, "path-list");
-    workstream.paths.forEach(function (path) { const item = element("li"); item.append(element("code", path)); pathList.append(item); });
-    paths.append(pathList);
-    article.append(paths);
-    const list = element("ol", undefined, "flow");
-    workstream.steps.forEach(function (step) {
-      const item = element("li"); item.append(element("span", mapped("basis", step.basis), "tag " + step.basis), element("strong", step.component + ": "), document.createTextNode(step.behavior)); list.append(item);
+    workstream.paths.forEach(function (path) {
+      const item = element("li");
+      item.append(element("code", path));
+      pathList.append(item);
     });
-    article.append(list);
-    appendEvidence(article, [
+    paths.append(pathList);
+    detail.append(paths);
+    const list = element("ol", undefined, "walkthrough-steps");
+    workstream.steps.forEach(function (step, index) {
+      const item = element("li");
+      const copy = element("div");
+      copy.append(element("span", mapped("basis", step.basis), "tag " + step.basis));
+      heading(copy, 4, step.component);
+      copy.append(element("p", step.behavior));
+      item.append(element("span", String(index + 1), "step-dot"), copy);
+      list.append(item);
+    });
+    detail.append(list);
+    appendEvidence(detail, [
       ...workstream.evidenceIds,
       ...workstream.steps.flatMap(function (step) { return step.evidenceIds; }),
     ]);
-    content.append(article);
+  }
+
+  review.workstreams.forEach(function (workstream) {
+    const button = element("button", undefined, "map-node");
+    button.type = "button";
+    button.id = workstreamTarget(workstream.id);
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-controls", "workstream-detail-panel");
+    button.setAttribute("aria-selected", "false");
+    button.tabIndex = -1;
+    button.append(element("span", workstream.title, "summary-title"), element("span", workstream.summary, "summary-copy"));
+    button.addEventListener("click", function () { activateWorkstream(workstream, button); });
+    button.addEventListener("keydown", function (event) {
+      const buttons = Array.from(workstreamButtonById.values());
+      const current = buttons.indexOf(button);
+      let next = null;
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") next = (current + 1) % buttons.length;
+      if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = (current - 1 + buttons.length) % buttons.length;
+      if (event.key === "Home") next = 0;
+      if (event.key === "End") next = buttons.length - 1;
+      if (next === null) return;
+      event.preventDefault();
+      buttons[next].focus();
+      buttons[next].click();
+    });
+    workstreamButtonById.set(workstream.id, button);
+    content.append(button);
   });
+  const initial = workstreamButtonById.get(review.workstreams[0].id);
+  activateWorkstream(review.workstreams[0], initial);
+}
+
+function openWorkstreamFromHash() {
+  const match = /^#workstream-card-(.+)$/u.exec(window.location.hash);
+  if (match === null) return;
+  const workstream = workstreamById.get(match[1]);
+  const button = workstreamButtonById.get(match[1]);
+  if (workstream === undefined || button === undefined) return;
+  button.click();
 }
 
 function renderSynthesis() {
@@ -948,14 +1095,20 @@ function renderSynthesis() {
 function renderLiterateDiff() {
   const content = document.getElementById("literate-content");
   review.literateDiff.forEach(function (entry) {
-    const article = element("details", undefined, "card disclosure-card");
-    const summary = element("summary");
-    const title = element("span", undefined, "summary-title"); title.append(element("code", entry.path));
-    summary.append(title, element("span", entry.role, "summary-copy")); article.append(summary);
+    const article = element("article", undefined, "code-walkthrough");
+    const file = element("div", undefined, "code-file");
+    const fileHeading = element("h3");
+    fileHeading.append(element("code", entry.path));
+    file.append(fileHeading, element("p", entry.role));
+    const explanation = element("div", undefined, "code-explanation");
     entry.changes.forEach(function (change) {
-      const block = element("div", undefined, "literate-change"); heading(block, 3, change.headline); block.append(element("p", change.explanation)); article.append(block);
+      const block = element("div", undefined, "literate-change");
+      heading(block, 4, change.headline);
+      block.append(element("p", change.explanation));
+      explanation.append(block);
     });
-    appendEvidence(article, entry.changes.flatMap(function (change) { return change.evidenceIds; }));
+    appendEvidence(explanation, entry.changes.flatMap(function (change) { return change.evidenceIds; }));
+    article.append(file, explanation);
     content.append(article);
   });
 }
@@ -964,6 +1117,7 @@ function renderSafety() {
   const renderClaims = function (targetId, claims) { const target = document.getElementById(targetId); claims.forEach(function (claim) { target.append(renderClaim(claim)); }); };
   renderClaims("invariant-content", review.invariants);
   renderClaims("risk-content", review.risks);
+  if (review.risks.length === 0) document.getElementById("risk-content").append(element("p", ui.focus.noRisks, "muted"));
   const decisions = document.getElementById("decision-content");
   if (review.decisions.length === 0) decisions.append(element("p", ui.focus.noDecisions, "muted"));
   review.decisions.forEach(function (entry) {
@@ -994,10 +1148,10 @@ function renderAuthorQuestions() {
 function renderQuiz() {
   const form = document.getElementById("quiz-form");
   const views = [];
-  document.getElementById("quiz-open").textContent = format(ui.quiz.open, { count: review.quiz.questions.length });
   review.quiz.questions.forEach(function (question, index) {
     const fieldset = element("fieldset", undefined, "quiz-question");
     fieldset.tabIndex = -1;
+    fieldset.hidden = index !== 0;
     const legend = element("legend", String(index + 1) + ". " + question.prompt);
     if (question.type === "multiple") legend.append(document.createTextNode(" "), element("span", ui.quiz.multiple, "tag"));
     fieldset.append(legend, element("span", mapped("quizCategory", question.category), "tag"));
@@ -1011,26 +1165,67 @@ function renderQuiz() {
     fieldset.setAttribute("aria-describedby", feedback.id);
     fieldset.append(feedback);
     form.append(fieldset);
-    views.push({ question: question, inputs: inputs, feedback: feedback, fieldset: fieldset });
+    views.push({ question: question, inputs: inputs, feedback: feedback, fieldset: fieldset, answered: false });
   });
-  const button = element("button", ui.quiz.submit); button.type = "submit"; form.append(button);
+  const actions = element("div", undefined, "quiz-actions");
+  const button = element("button", ui.quiz.check);
+  button.type = "submit";
+  actions.append(button);
+  form.append(actions);
   appendEvidence(document.getElementById("quiz-evidence"), review.quiz.questions.flatMap(function (question) { return question.evidenceIds; }));
-  form.addEventListener("submit", function (event) {
-    event.preventDefault(); let correctCount = 0; let firstIncorrect = null;
-    views.forEach(function (view) {
-      const selected = new Set(view.inputs.filter(function (input) { return input.checked; }).map(function (input) { return input.value; }));
-      const expected = new Set(view.question.correctOptionIds);
-      const correct = selected.size === expected.size && Array.from(expected).every(function (optionId) { return selected.has(optionId); });
-      if (correct) correctCount += 1;
-      else if (firstIncorrect === null) firstIncorrect = view.fieldset;
-      view.feedback.hidden = false; view.feedback.className = "answer " + (correct ? "correct" : "incorrect"); view.feedback.textContent = (correct ? ui.quiz.correct + " " : ui.quiz.review + " ") + view.question.explanation;
-    });
+  const progressLabel = document.getElementById("quiz-progress-label");
+  const progressTrack = document.getElementById("quiz-progress-track");
+  const progressBar = document.getElementById("quiz-progress-bar");
+  let currentIndex = 0;
+  let correctCount = 0;
+
+  function updateProgress(completed) {
+    const percent = Math.round((completed / views.length) * 100);
+    progressLabel.textContent = format(ui.quiz.progress, { current: currentIndex + 1, total: views.length });
+    progressTrack.setAttribute("aria-valuenow", String(percent));
+    progressBar.style.width = String(percent) + "%";
+  }
+
+  function showQuestion(index) {
+    views.forEach(function (view, viewIndex) { view.fieldset.hidden = viewIndex !== index; });
+    currentIndex = index;
+    button.textContent = ui.quiz.check;
+    updateProgress(index);
+    views[index].fieldset.focus();
+  }
+
+  function showResult() {
+    form.hidden = true;
+    progressLabel.textContent = format(ui.quiz.progress, { current: views.length, total: views.length });
+    progressTrack.setAttribute("aria-valuenow", "100");
+    progressBar.style.width = "100%";
     const percent = Math.round((correctCount / views.length) * 100);
     const result = document.getElementById("quiz-result");
     result.className = "result";
     result.textContent = format(ui.quiz.result, { correct: correctCount, total: views.length, percent: percent, suffix: ui.quiz.resultSuffix });
-    if (firstIncorrect === null) result.focus();
-    else firstIncorrect.focus();
+    result.focus();
+  }
+
+  updateProgress(0);
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    const view = views[currentIndex];
+    if (view.answered) {
+      if (currentIndex === views.length - 1) showResult();
+      else showQuestion(currentIndex + 1);
+      return;
+    }
+    const selected = new Set(view.inputs.filter(function (input) { return input.checked; }).map(function (input) { return input.value; }));
+    const expected = new Set(view.question.correctOptionIds);
+    const correct = selected.size === expected.size && Array.from(expected).every(function (optionId) { return selected.has(optionId); });
+    if (correct) correctCount += 1;
+    view.answered = true;
+    view.inputs.forEach(function (input) { input.disabled = true; });
+    view.feedback.hidden = false;
+    view.feedback.className = "answer " + (correct ? "correct" : "incorrect");
+    view.feedback.textContent = (correct ? ui.quiz.correct + " " : ui.quiz.review + " ") + view.question.explanation;
+    updateProgress(currentIndex + 1);
+    button.textContent = currentIndex === views.length - 1 ? ui.quiz.finish : ui.quiz.next;
   });
 }
 
@@ -1069,7 +1264,9 @@ renderQuiz();
 renderSsotCandidates();
 renderEvidenceIndex();
 renderTechnicalDetails();
+openWorkstreamFromHash();
 openEvidenceFromHash();
+window.addEventListener("hashchange", openWorkstreamFromHash);
 window.addEventListener("hashchange", openEvidenceFromHash);`;
 
 export function serializeReviewForHtml(review) {
@@ -1117,34 +1314,102 @@ export function renderReviewHtml(review) {
   <style>${REVIEW_STYLE}</style>
 </head>
 <body>
-  <header>
-    <p class="eyebrow">Hope · diff</p>
-    <h1 id="review-title">${ui.documentTitle}</h1>
-    <p id="review-lede" class="lede"></p>
-    <p class="review-source"><a id="review-source" target="_blank" rel="noreferrer noopener"></a></p>
-    <dl id="review-context" class="meta compact-meta"></dl>
-    <p id="scope-boundary" class="muted" role="note"></p>
-    <p id="scope-summary-warning" class="notice" role="note" hidden></p>
+  <header class="review-cover">
+    <div class="cover-grid">
+      <div class="cover-copy">
+        <p class="eyebrow">Hope · diff</p>
+        <h1 id="review-title">${ui.documentTitle}</h1>
+        <p id="review-lede" class="lede"></p>
+        <p class="review-source"><a id="review-source" target="_blank" rel="noreferrer noopener"></a></p>
+        <p id="scope-summary-warning" class="notice" role="note" hidden></p>
+      </div>
+      <aside class="cover-context">
+        <dl id="review-context" class="meta compact-meta"></dl>
+        <details class="scope-details">
+          <summary>${ui.context.scopeSummary}</summary>
+          <p id="scope-boundary" role="note"></p>
+        </details>
+        <a id="focus-nav-link" class="review-focus-link" href="#review-focus">${ui.nav.focus}</a>
+      </aside>
+    </div>
   </header>
-  <nav class="section-nav" aria-label="${ui.reviewSections}">
-    <a href="#overview">${ui.nav.summary}</a>
-    <a href="#workstreams">${ui.nav.behavior}</a>
-    <a id="focus-nav-link" href="#review-focus">${ui.nav.focus}</a>
-    <a href="#literate-diff">${ui.nav.code}</a>
-    <a id="microworld-nav-link" href="#microworld-section">${ui.nav.try}</a>
-    <a href="#quiz">${ui.nav.quiz}</a>
-    <a href="#details">${ui.nav.details}</a>
-  </nav>
-  <main>
-    <section id="overview" aria-labelledby="overview-heading"><h2 id="overview-heading">${ui.overview.heading}</h2><h3>${ui.overview.observableHeading}</h3><div id="observable-changes"></div><div id="visual-section" aria-labelledby="visual-heading"><h3 id="visual-heading">${ui.visual.heading}</h3><div id="visual-content" class="grid"></div></div><details class="secondary-details"><summary>${ui.overview.more}</summary><h3>${ui.overview.whyHeading}</h3><div id="background-content"></div><h3>${ui.overview.beforeAfterHeading}</h3><div id="overview-before-after" class="grid"></div></details><div id="overview-evidence"></div></section>
-    <section id="workstreams" aria-labelledby="workstream-heading"><h2 id="workstream-heading">${ui.behavior.heading}</h2><p class="muted">${ui.behavior.help}</p><div id="workstream-content" class="grid"></div><details id="synthesis" class="secondary-details"><summary>${ui.behavior.connectionsSummary}</summary><div id="synthesis-summary"></div><div id="synthesis-interactions" class="grid"></div><div id="synthesis-evidence"></div></details></section>
-    <section id="review-focus" aria-labelledby="review-focus-heading"><h2 id="review-focus-heading">${ui.focus.heading}</h2><h3>${ui.focus.questions}</h3><div id="question-content" class="grid"></div><h3>${ui.focus.risks}</h3><div id="risk-content"></div><details class="secondary-details"><summary>${ui.focus.more}</summary><h3>${ui.focus.invariants}</h3><div id="invariant-content"></div><h3>${ui.focus.decisions}</h3><div id="decision-content" class="grid"></div><h3>${ui.focus.verification}</h3><ul id="verification-content"></ul></details><div id="focus-evidence"></div></section>
-    <section id="literate-diff" aria-labelledby="literate-heading"><h2 id="literate-heading">${ui.code.heading}</h2><p class="muted">${ui.code.help}</p><div id="literate-content" class="grid"></div><details id="evidence-index" class="secondary-details" hidden><summary id="evidence-index-title"></summary><div id="evidence-index-content" class="grid"></div></details></section>
-    <section id="microworld-section" aria-labelledby="microworld-heading" hidden><h2 id="microworld-heading">${ui.microworld.heading}</h2><details class="section-disclosure"><summary id="microworld-title"></summary><p class="notice">${ui.microworld.notice}</p><p id="microworld-instructions"></p><div id="microworld-evidence"></div><div id="microworld-controls" class="controls"></div><p id="scenario-status" class="sr-only" role="status" aria-live="polite"></p><div id="scenario-view" role="region" aria-label="${ui.microworld.regionLabel}"></div></details></section>
-    <section id="quiz" aria-labelledby="quiz-heading"><h2 id="quiz-heading">${ui.quiz.heading}</h2><details id="quiz-disclosure" class="section-disclosure"><summary id="quiz-open"></summary><p class="muted">${ui.quiz.help}</p><form id="quiz-form"></form><div id="quiz-evidence"></div><p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1"></p></details></section>
-    <section id="ssot-section" aria-labelledby="ssot-heading" hidden><h2 id="ssot-heading">${ui.projectKnowledge.heading}</h2><p class="muted">${ui.projectKnowledge.help}</p><div id="ssot-content" class="grid"></div></section>
-    <section id="details" aria-labelledby="details-heading"><h2 id="details-heading">${ui.details.heading}</h2><details class="technical-details"><summary>${ui.details.summary}</summary><p class="muted details-intro">${ui.details.help}</p><dl id="details-meta" class="meta"></dl><p class="muted">${ui.details.fingerprint}: <code id="details-fingerprint"></code></p><div id="scope-details-warning" class="notice" role="note" hidden></div><details><summary>${ui.details.changedFileMap}</summary><div class="table-wrap" tabindex="0" role="region" aria-label="${ui.details.changedFileMap}"><table class="file-map"><thead><tr><th scope="col">${ui.details.path}</th><th scope="col">${ui.details.previousPath}</th><th scope="col">${ui.details.status}</th><th scope="col">${ui.details.lines}</th><th scope="col">${ui.details.body}</th><th scope="col">${ui.details.processingUnit}</th><th scope="col">${ui.details.relatedFlows}</th></tr></thead><tbody id="file-map-body"></tbody></table></div></details><h3>${ui.details.processedUnits}</h3><p class="muted">${ui.details.processingHelp}</p><div id="analysis-pass-content" class="grid"></div></details></section>
-  </main>
+  <div class="article-shell">
+    <nav class="section-nav" aria-label="${ui.reviewSections}">
+      <a href="#overview"><span class="nav-number">01</span><span>${ui.nav.summary}</span></a>
+      <a href="#workstreams"><span class="nav-number">02</span><span>${ui.nav.behavior}</span></a>
+      <a href="#literate-diff"><span class="nav-number">03</span><span>${ui.nav.code}</span></a>
+      <a id="microworld-nav-link" href="#microworld-section"><span class="nav-number">04</span><span>${ui.nav.try}</span></a>
+      <a href="#quiz"><span class="nav-number">05</span><span>${ui.nav.quiz}</span></a>
+      <a href="#evidence"><span class="nav-number">06</span><span>${ui.nav.optional}</span></a>
+    </nav>
+    <main>
+      <section id="overview" class="chapter chapter-overview" aria-labelledby="overview-heading">
+        <div class="chapter-head"><span class="chapter-number">01</span><div><p class="chapter-kicker">${ui.overview.eyebrow}</p><h2 id="overview-heading">${ui.overview.heading}</h2></div></div>
+        <div class="chapter-surface overview-layout">
+          <div class="overview-story">
+            <h3>${ui.overview.observableHeading}</h3>
+            <div id="observable-changes"></div>
+            <details class="secondary-details"><summary>${ui.overview.more}</summary><h3>${ui.overview.whyHeading}</h3><div id="background-content"></div><h3>${ui.overview.beforeAfterHeading}</h3><div id="overview-before-after" class="grid"></div></details>
+            <div id="overview-evidence"></div>
+          </div>
+          <aside id="review-focus" aria-labelledby="review-focus-heading">
+            <h3 id="review-focus-heading">${ui.focus.heading}</h3>
+            <p class="muted focus-intro">${ui.focus.intro}</p>
+            <div class="attention-grid">
+              <article class="attention-panel"><h4>${ui.focus.risks}</h4><div id="risk-content"></div></article>
+              <article class="attention-panel"><h4>${ui.focus.verification}</h4><ul id="verification-content"></ul></article>
+            </div>
+            <h4>${ui.focus.questions}</h4>
+            <div id="question-content" class="grid"></div>
+            <details class="secondary-details"><summary>${ui.focus.more}</summary><h4>${ui.focus.invariants}</h4><div id="invariant-content"></div><h4>${ui.focus.decisions}</h4><div id="decision-content" class="grid"></div></details>
+            <div id="focus-evidence"></div>
+          </aside>
+        </div>
+      </section>
+      <section id="workstreams" class="chapter chapter-map" aria-labelledby="workstream-heading">
+        <div class="chapter-head"><span class="chapter-number">02</span><div><p class="chapter-kicker">${ui.behavior.eyebrow}</p><h2 id="workstream-heading">${ui.behavior.heading}</h2><p class="chapter-intro">${ui.behavior.help}</p></div></div>
+        <div class="chapter-surface">
+          <div id="visual-section" aria-labelledby="visual-heading"><h3 id="visual-heading">${ui.visual.heading}</h3><div id="visual-content" class="grid"></div></div>
+          <div class="system-map-layout">
+            <div id="workstream-content" class="system-map-list" role="tablist" aria-label="${ui.behavior.navigation}"></div>
+            <article id="workstream-detail-panel" class="system-map-detail" role="tabpanel" tabindex="-1"></article>
+          </div>
+          <details id="synthesis" class="secondary-details map-connections"><summary>${ui.behavior.connectionsSummary}</summary><div id="synthesis-summary"></div><div id="synthesis-interactions" class="grid"></div><div id="synthesis-evidence"></div></details>
+        </div>
+      </section>
+      <section id="literate-diff" class="chapter chapter-code" aria-labelledby="literate-heading">
+        <div class="chapter-head"><span class="chapter-number">03</span><div><p class="chapter-kicker">${ui.code.eyebrow}</p><h2 id="literate-heading">${ui.code.heading}</h2><p class="chapter-intro">${ui.code.help}</p></div></div>
+        <div class="chapter-surface"><div id="literate-content"></div></div>
+      </section>
+      <section id="microworld-section" class="chapter chapter-lab" aria-labelledby="microworld-heading" hidden>
+        <div class="chapter-head"><span class="chapter-number">04</span><div><p class="chapter-kicker">${ui.microworld.eyebrow}</p><h2 id="microworld-heading">${ui.microworld.heading}</h2></div></div>
+        <div class="chapter-surface lab-grid">
+          <div class="lab-controls"><h3 id="microworld-title"></h3><p class="notice">${ui.microworld.notice}</p><p id="microworld-instructions"></p><div id="microworld-evidence"></div><div id="microworld-controls" class="controls"></div></div>
+          <div><p id="scenario-status" class="sr-only" role="status" aria-live="polite"></p><div id="scenario-view" class="lab-canvas" role="region" aria-label="${ui.microworld.regionLabel}"></div></div>
+        </div>
+      </section>
+      <section id="quiz" class="chapter chapter-quiz" aria-labelledby="quiz-heading">
+        <div class="chapter-head"><span class="chapter-number">05</span><div><p class="chapter-kicker">${ui.quiz.eyebrow}</p><h2 id="quiz-heading">${ui.quiz.heading}</h2><p class="chapter-intro">${ui.quiz.help}</p></div></div>
+        <div class="chapter-surface">
+          <div class="quiz-progress"><span id="quiz-progress-label"></span></div>
+          <div id="quiz-progress-track" class="quiz-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="quiz-progress-bar"></span></div>
+          <form id="quiz-form"></form>
+          <div id="quiz-evidence"></div>
+          <p id="quiz-result" class="result" role="status" aria-live="polite" tabindex="-1"></p>
+        </div>
+      </section>
+      <section id="evidence" class="chapter chapter-evidence" aria-labelledby="evidence-heading">
+        <div class="chapter-head"><span class="chapter-number">06</span><div><p class="chapter-kicker">${ui.details.eyebrow}</p><h2 id="evidence-heading">${ui.optional.heading}</h2><p class="chapter-intro">${ui.optional.help}</p></div></div>
+        <div class="chapter-surface">
+          <details id="evidence-index" class="secondary-details" hidden><summary id="evidence-index-title"></summary><div id="evidence-index-content" class="grid"></div></details>
+          <div class="optional-stack">
+            <div id="ssot-section" class="optional-module" aria-labelledby="ssot-heading" hidden><h3 id="ssot-heading">${ui.projectKnowledge.heading}</h3><p class="muted">${ui.projectKnowledge.help}</p><div id="ssot-content" class="grid"></div></div>
+            <div id="details" class="optional-module" aria-labelledby="details-heading"><details class="technical-details"><summary><span id="details-heading" class="summary-title">${ui.details.heading}</span><span class="summary-copy">${ui.details.summary}</span></summary><p class="muted details-intro">${ui.details.help}</p><dl id="details-meta" class="meta"></dl><p class="muted">${ui.details.fingerprint}: <code id="details-fingerprint"></code></p><div id="scope-details-warning" class="notice" role="note" hidden></div><details><summary>${ui.details.changedFileMap}</summary><div class="table-wrap" tabindex="0" role="region" aria-label="${ui.details.changedFileMap}"><table class="file-map"><thead><tr><th scope="col">${ui.details.path}</th><th scope="col">${ui.details.previousPath}</th><th scope="col">${ui.details.status}</th><th scope="col">${ui.details.lines}</th><th scope="col">${ui.details.body}</th><th scope="col">${ui.details.processingUnit}</th><th scope="col">${ui.details.relatedFlows}</th></tr></thead><tbody id="file-map-body"></tbody></table></div></details><h3>${ui.details.processedUnits}</h3><p class="muted">${ui.details.processingHelp}</p><div id="analysis-pass-content" class="grid"></div></details></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
   <footer>${ui.footer}</footer>
   <noscript>${ui.noscript}</noscript>
   <script id="review-data" type="application/json">${data}</script>
@@ -1223,4 +1488,51 @@ export async function writeReviewHtml(review, options = {}) {
     throw new Error("Hope could not establish the temporary review retention time");
   }
   return { file: output.file, eligibleAfter: parsedEligibleAfter };
+}
+
+export async function publishReviewExport(stagedFile, outputFile, options = {}) {
+  const staged = resolve(stagedFile);
+  const eligibleAfter = await defaultReviewEligibleAfter(staged, {
+    temporaryRoot: options.temporaryRoot,
+  });
+  if (eligibleAfter === undefined) {
+    throw new Error("Hope export requires a managed private staged review.");
+  }
+  const output = await chooseOutputFile(outputFile, options);
+  if (output.privateDirectory !== null) {
+    throw new Error("Hope export requires an explicit output file.");
+  }
+  const stagedHtml = await readFile(staged, "utf8");
+  const marker = managedReviewMarker(eligibleAfter);
+  if (!stagedHtml.startsWith(marker)) {
+    throw new Error("Hope staged review marker changed before export.");
+  }
+  const html = stagedHtml.slice(marker.length);
+  const temporaryFile = join(
+    dirname(output.file),
+    `.${basename(output.file)}.${randomBytes(8).toString("hex")}.tmp`,
+  );
+  let published = false;
+  try {
+    await writeFile(temporaryFile, html, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    await chmod(temporaryFile, 0o600);
+    await link(temporaryFile, output.file);
+    published = true;
+    await unlink(temporaryFile);
+  } catch (error) {
+    await rm(temporaryFile, { force: true });
+    if (published) await rm(output.file, { force: true });
+    throw error;
+  }
+  let cleanupPending = false;
+  const removeStage = options.removeStage ?? (async () => {
+    await rm(staged, { force: true });
+    await rm(dirname(staged), { recursive: true, force: true });
+  });
+  try {
+    await removeStage();
+  } catch {
+    cleanupPending = true;
+  }
+  return { file: output.file, eligibleAfter: null, cleanupPending };
 }

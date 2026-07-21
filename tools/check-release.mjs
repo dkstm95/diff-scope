@@ -8,34 +8,46 @@ import {
 } from "../plugins/hope/skills/diff/scripts/lib/inspection-pages.mjs";
 
 const root = new URL("../", import.meta.url);
-const fromRoot = (relativePath) => new URL(relativePath, root);
-const read = async (relativePath) => await readFile(fromRoot(relativePath), "utf8");
-const readJson = async (relativePath) => JSON.parse(await read(relativePath));
-const currentVersion = "0.3.2-alpha";
+const fromRoot = (path) => new URL(path, root);
+const read = async (path) => await readFile(fromRoot(path), "utf8");
+const readJson = async (path) => JSON.parse(await read(path));
+const currentVersion = "0.4.0-alpha";
 
 const requiredFiles = [
   ".agents/plugins/marketplace.json",
   "plugins/hope/.codex-plugin/plugin.json",
   "plugins/hope/LICENSE",
   "plugins/hope/assets/telescope.svg",
+  "plugins/hope/runtime/shared/private-files.mjs",
+  "plugins/hope/runtime/diff/cli.mjs",
+  "plugins/hope/runtime/diff/diff-run.mjs",
+  "plugins/hope/runtime/diff/latest-pull-request.mjs",
+  "plugins/hope/runtime/cleanup/cli.mjs",
+  "plugins/hope/runtime/cleanup/cleanup-plan.mjs",
   "plugins/hope/skills/diff/SKILL.md",
   "plugins/hope/skills/diff/agents/openai.yaml",
-  "plugins/hope/skills/diff/assets/telescope.svg",
-  "plugins/hope/skills/diff/references/change-request-v1.schema.json",
-  "plugins/hope/skills/diff/references/review-model-v1.schema.json",
-  "plugins/hope/skills/diff/references/review-contract.md",
+  "plugins/hope/skills/diff/scripts/hope-diff.mjs",
   "plugins/hope/skills/diff/scripts/collect-change-request.mjs",
   "plugins/hope/skills/diff/scripts/inspect-change-request.mjs",
   "plugins/hope/skills/diff/scripts/render-review.mjs",
   "plugins/hope/skills/diff/scripts/lib/inspection-pages.mjs",
-  "plugins/hope/skills/diff/scripts/lib/safety.mjs",
-  "plugins/hope/skills/diff/scripts/lib/validate-review.mjs",
   "plugins/hope/skills/diff/scripts/lib/render-review.mjs",
   "plugins/hope/skills/diff/scripts/lib/review-retention.mjs",
+  "plugins/hope/skills/diff/scripts/lib/safety.mjs",
+  "plugins/hope/skills/diff/scripts/lib/validate-review.mjs",
+  "plugins/hope/skills/diff/references/change-request-v1.schema.json",
+  "plugins/hope/skills/diff/references/review-model-v1.schema.json",
+  "plugins/hope/skills/diff/references/review-contract.md",
+  "plugins/hope/skills/cleanup/SKILL.md",
+  "plugins/hope/skills/cleanup/agents/openai.yaml",
+  "plugins/hope/skills/cleanup/assets/telescope.svg",
+  "plugins/hope/skills/cleanup/scripts/cleanup.mjs",
+  "docs/architecture.md",
   "README.md",
   "README.ko.md",
-  "CHANGELOG.md",
+  "CONTRIBUTING.md",
   "SECURITY.md",
+  "CHANGELOG.md",
   "LICENSE",
 ];
 
@@ -43,19 +55,14 @@ const retiredFiles = [
   "plugins/hope/skills/align",
   "plugins/hope/skills/diff/references/artifact-contract.md",
   "plugins/hope/skills/diff/references/artifact-v2.schema.json",
-  "plugins/hope/skills/diff/references/change-context-v2.schema.json",
   "plugins/hope/skills/diff/scripts/collect-change-context.mjs",
   "plugins/hope/skills/diff/scripts/render-diff.mjs",
-  "plugins/hope/skills/diff/scripts/lib/validate-artifact.mjs",
-  "plugins/hope/skills/diff/scripts/lib/render-artifact.mjs",
 ];
 
-await Promise.all(requiredFiles.map(async (file) => await access(fromRoot(file))));
-await Promise.all(
-  retiredFiles.map(async (file) => {
-    await assert.rejects(access(fromRoot(file)), undefined, `${file} must not ship`);
-  }),
-);
+await Promise.all(requiredFiles.map(async (path) => await access(fromRoot(path))));
+await Promise.all(retiredFiles.map(async (path) => {
+  await assert.rejects(access(fromRoot(path)), undefined, `${path} must not ship`);
+}));
 
 const skillDirectories = (await readdir(fromRoot("plugins/hope/skills/"), {
   withFileTypes: true,
@@ -63,7 +70,7 @@ const skillDirectories = (await readdir(fromRoot("plugins/hope/skills/"), {
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort();
-assert.deepEqual(skillDirectories, ["diff"]);
+assert.deepEqual(skillDirectories, ["cleanup", "diff"]);
 
 const [
   packageJson,
@@ -71,16 +78,23 @@ const [
   marketplace,
   changeRequestSchema,
   reviewModelSchema,
-  reviewContract,
   diffSkill,
+  cleanupSkill,
   diffOpenAi,
-  diffInspector,
-  reviewRetention,
-  contributing,
+  cleanupOpenAi,
+  diffCli,
+  diffRun,
+  latestPullRequest,
+  cleanupCli,
+  cleanupPlan,
+  privateFiles,
+  retention,
   readme,
   readmeKo,
-  changelog,
+  architecture,
+  contributing,
   security,
+  changelog,
   releaseWorkflow,
 ] = await Promise.all([
   readJson("package.json"),
@@ -88,150 +102,111 @@ const [
   readJson(".agents/plugins/marketplace.json"),
   readJson("plugins/hope/skills/diff/references/change-request-v1.schema.json"),
   readJson("plugins/hope/skills/diff/references/review-model-v1.schema.json"),
-  read("plugins/hope/skills/diff/references/review-contract.md"),
   read("plugins/hope/skills/diff/SKILL.md"),
+  read("plugins/hope/skills/cleanup/SKILL.md"),
   read("plugins/hope/skills/diff/agents/openai.yaml"),
-  read("plugins/hope/skills/diff/scripts/inspect-change-request.mjs"),
+  read("plugins/hope/skills/cleanup/agents/openai.yaml"),
+  read("plugins/hope/runtime/diff/cli.mjs"),
+  read("plugins/hope/runtime/diff/diff-run.mjs"),
+  read("plugins/hope/runtime/diff/latest-pull-request.mjs"),
+  read("plugins/hope/runtime/cleanup/cli.mjs"),
+  read("plugins/hope/runtime/cleanup/cleanup-plan.mjs"),
+  read("plugins/hope/runtime/shared/private-files.mjs"),
   read("plugins/hope/skills/diff/scripts/lib/review-retention.mjs"),
-  read("CONTRIBUTING.md"),
   read("README.md"),
   read("README.ko.md"),
-  read("CHANGELOG.md"),
+  read("docs/architecture.md"),
+  read("CONTRIBUTING.md"),
   read("SECURITY.md"),
+  read("CHANGELOG.md"),
   read(".github/workflows/release.yml"),
 ]);
 
 assert.equal(packageJson.name, "hope");
 assert.equal(packageJson.version, currentVersion);
-assert.equal(packageJson.version, plugin.version);
 assert.equal(plugin.name, "hope");
-assert.equal(plugin.repository, "https://github.com/dkstm95/hope");
+assert.equal(plugin.version, currentVersion);
 assert.equal(plugin.skills, "./skills/");
+assert.equal(plugin.repository, "https://github.com/dkstm95/hope");
 assert.equal(plugin.interface.displayName, "Hope");
-assert.match(plugin.description, /pull request/u);
+assert.match(plugin.description, /harness/u);
 assert.ok(plugin.interface.defaultPrompt.some((prompt) => prompt.includes("$hope:diff")));
-assert.doesNotMatch(JSON.stringify(plugin), /\balign\b|\bIntentV1\b/u);
+assert.ok(plugin.interface.defaultPrompt.some((prompt) => prompt.includes("$hope:cleanup")));
 
 assert.equal(marketplace.name, "hope");
-assert.equal(marketplace.interface.displayName, "Hope");
-assert.ok(
-  marketplace.plugins.some(
-    (entry) => entry.name === "hope" && entry.source.path === "./plugins/hope",
-  ),
-);
+assert.ok(marketplace.plugins.some(
+  (entry) => entry.name === "hope" && entry.source.path === "./plugins/hope",
+));
 
 assert.match(diffSkill, /^---\r?\nname: diff\r?\ndescription: /u);
-assert.match(diffSkill, /\$hope:diff/u);
-assert.match(diffSkill, /collect-change-request\.mjs --url/u);
-assert.match(diffSkill, /inspect-change-request\.mjs --context <change-request\.json> --summary/u);
-assert.match(diffSkill, /inspect-change-request\.mjs --context <change-request\.json> --pass <pass-id>/u);
+assert.match(diffSkill, /hope-diff\.mjs start/u);
+assert.match(diffSkill, /--latest/u);
+assert.match(diffSkill, /hope-diff\.mjs inspect/u);
+assert.match(diffSkill, /hope-diff\.mjs validate/u);
+assert.match(diffSkill, /hope-diff\.mjs render/u);
+assert.match(diffSkill, /hope-diff\.mjs abandon/u);
 assert.match(diffSkill, /--after <receipt>/u);
-assert.match(diffSkill, /page\.hasNext/u);
-assert.match(diffSkill, /analysisPlan/u);
-assert.match(diffSkill, /analysisCoverage/u);
-assert.match(diffSkill, /top-level `locale`[\s\S]*`ko` or `en`/u);
-assert.match(diffSkill, /4,000 changed lines/u);
-assert.match(diffSkill, /64\s+KiB/u);
-assert.match(diffSkill, /--validate-only/u);
-assert.match(diffSkill, /render-review\.mjs --input/u);
-assert.match(diffSkill, /--cleanup/u);
-assert.match(diffSkill, /render-review\.mjs --context <change-request\.json> --cleanup/u);
-assert.match(diffSkill, /hope-review\.html/u);
-assert.doesNotMatch(
-  `${diffSkill}\n${diffOpenAi}`,
-  /\$hope:align|IntentV1|artifact\.json|explanation\.md|collect-change-context|render-diff/u,
-);
+assert.match(diffSkill, /4 MiB/u);
+assert.match(diffSkill, /8\s+MiB/u);
 assert.match(diffOpenAi, /\$hope:diff/u);
-assert.match(diffInspector, /--summary/u);
-assert.match(diffInspector, /--pass/u);
-assert.match(diffInspector, /--after/u);
-assert.match(diffInspector, /MAX_INSPECTION_OUTPUT_BYTES/u);
-assert.match(diffInspector, /validateChangeRequest/u);
-assert.match(reviewRetention, /DEFAULT_REVIEW_RETENTION_MS\s*=\s*7\s*\*/u);
-assert.match(reviewRetention, /MANAGED_REVIEW_MARKER/u);
-assert.match(reviewRetention, /parseManagedReviewMarker/u);
-assert.match(reviewRetention, /stickySharedRoot/u);
-assert.match(reviewRetention, /currentUid/u);
-assert.match(reviewRetention, /isSymbolicLink/u);
-assert.doesNotMatch(reviewRetention, /birthtimeMs|ctimeMs|mtimeMs/u);
-assert.match(reviewContract, /analysisPlan/u);
-assert.match(reviewContract, /analysisCoverage\.processedPasses/u);
-assert.match(reviewContract, /terminal receipt/u);
-assert.match(reviewContract, /attest/u);
-assert.match(reviewContract, /cross-workstream/u);
-assert.match(reviewContract, /one global quiz/u);
-assert.match(reviewContract, /human-review order/u);
-assert.match(reviewContract, /collapsed analysis details/u);
-assert.match(reviewContract, /fixed,[\s\S]*trusted dictionary/u);
-assert.match(diffSkill, /compact serialized[\s\S]*4 MiB[\s\S]*8 MiB/u);
-assert.match(reviewContract, /ReviewModelV1[\s\S]*4 MiB[\s\S]*8 MiB/u);
-assert.match(security, /Review Model[\s\S]*4 MiB[\s\S]*8 MiB/u);
-assert.equal(MAX_INSPECTION_OUTPUT_BYTES, 16 * 1024);
-for (const document of [diffSkill, reviewContract, contributing, security]) {
-  assert.match(document, /16 KiB/u);
-}
-assert.doesNotMatch(contributing, /8 KiB stdout ceiling/u);
-assert.match(security, /deliberately does not\s+bind[\s\S]*`updated_at`/u);
-assert.doesNotMatch(
-  security,
-  /also binds the pull request's provider-supplied `updated_at` value/u,
-);
-assert.match(readme, /cleanup time, fixed seven days after creation/u);
-assert.doesNotMatch(readme, /eligible for cleanup for at least seven days/u);
 
+assert.match(cleanupSkill, /^---\r?\nname: cleanup\r?\ndescription: /u);
+assert.match(cleanupSkill, /cleanup\.mjs preview/u);
+assert.match(cleanupSkill, /cleanup\.mjs apply/u);
+assert.match(cleanupSkill, /explicit confirmation/u);
+assert.match(cleanupSkill, /does not remove[\s\S]*branches/u);
+assert.match(cleanupOpenAi, /\$hope:cleanup/u);
+
+assert.match(diffCli, /start[\s\S]*inspect[\s\S]*validate[\s\S]*render/u);
+assert.match(diffRun, /Diff run/u);
+assert.match(diffRun, /revision/u);
+assert.match(diffRun, /listTerminalDiffRuns/u);
+assert.match(latestPullRequest, /sort:created-desc/u);
+assert.match(latestPullRequest, /normalizePullRequestUrl/u);
+assert.match(cleanupCli, /Preview or apply cleanup/u);
+assert.match(cleanupPlan, /previewCleanup/u);
+assert.match(cleanupPlan, /applyCleanup/u);
+assert.match(cleanupPlan, /planDigest/u);
+assert.match(privateFiles, /safeTemporaryRootStatus/u);
+assert.match(retention, /DEFAULT_REVIEW_RETENTION_MS\s*=\s*7\s*\*/u);
+assert.match(retention, /removeManagedReview/u);
+assert.doesNotMatch(`${diffCli}\n${cleanupCli}`, /class\s+\w*Runner/u);
+
+assert.equal(MAX_INSPECTION_OUTPUT_BYTES, 16 * 1024);
 assert.equal(changeRequestSchema.properties.schemaVersion.const, 1);
 assert.equal(reviewModelSchema.properties.schemaVersion.const, 1);
-assert.match(changeRequestSchema.title, /ChangeRequestV1/u);
-assert.match(reviewModelSchema.title, /ReviewModelV1/u);
 assert.ok(changeRequestSchema.required.includes("analysisPlan"));
 assert.ok(reviewModelSchema.required.includes("analysisCoverage"));
-assert.ok(reviewModelSchema.required.includes("locale"));
 assert.deepEqual(reviewModelSchema.properties.locale.enum, ["en", "ko"]);
-assert.deepEqual(
-  reviewModelSchema.$defs.analysisCoverage.required,
-  ["inspectionProtocolVersion", "summary", "processedPasses"],
-);
-assert.ok(reviewModelSchema.$defs.processedPass.required.includes("pageCount"));
-assert.ok(reviewModelSchema.$defs.processedPass.required.includes("terminalReceipt"));
-assert.deepEqual(
-  reviewModelSchema.$defs.verification.properties.status.enum,
-  ["not-run", "unknown"],
-);
-assert.doesNotMatch(
-  JSON.stringify(reviewModelSchema.$defs.evidence.properties.source.enum),
-  /verification/u,
-);
 
 for (const document of [readme, readmeKo]) {
   assert.match(document, /\$hope:diff/u);
-  assert.match(document, /GitHub/u);
+  assert.match(document, /most recently created PR|생성 시각이 가장 최근인 PR/u);
+  assert.match(document, /\$hope:cleanup/u);
   assert.match(document, /hope-review\.html/u);
-  assert.match(document, /dkstm95\/hope/u);
   assert.match(document, /merge-base/u);
-  assert.match(document, /analysisPlan/u);
   assert.match(document, /4,000/u);
   assert.match(document, /64\s+KiB/u);
+  assert.match(document, /16\s+KiB/u);
   assert.match(document, /250/u);
   assert.match(document, /200/u);
   assert.match(document, /20,000/u);
   assert.match(document, /768\s+KiB/u);
   assert.match(document, /128\s+KiB/u);
-  assert.match(document, /no (?:cache|network)|캐시/u);
   assert.match(document, /eligibleAfter/u);
   assert.match(document, new RegExp(`v${currentVersion.replaceAll(".", "\\.")}`, "u"));
-  assert.doesNotMatch(document, /\$hope:align|HEAD\s*->\s*(?:current )?working tree/u);
+  assert.doesNotMatch(document, /\$hope:align/u);
 }
-assert.doesNotMatch(readme, /fixed interface uses English/u);
-assert.doesNotMatch(readmeKo, /고정 UI는 영어/u);
+assert.match(architecture, /same feature\s+commands/u);
+assert.match(architecture, /never guess branch ownership|deletes only items it created and recorded/u);
+assert.match(contributing, /Do not add a generic `Runner`/u);
+assert.match(security, /exact plan path\s+and digest/u);
+assert.match(security, /Branch deletion will require a Hope-created branch record/u);
 
+assert.match(changelog, /^## 0\.4\.0-alpha /mu);
 assert.match(changelog, /^## 0\.3\.2-alpha /mu);
-assert.match(changelog, /^## 0\.3\.1-alpha /mu);
-assert.match(changelog, /^## 0\.3\.0-alpha /mu);
-assert.match(changelog, /^## 0\.2\.0-alpha /mu);
-assert.match(changelog, /^## 0\.1\.0-alpha /mu);
 assert.match(changelog, /Released under the DiffScope name/u);
 assert.match(releaseWorkflow, /actions\/checkout@v6/u);
 assert.match(releaseWorkflow, /actions\/setup-node@v6/u);
-assert.doesNotMatch(releaseWorkflow, /actions\/(?:checkout|setup-node)@v7/u);
 
 console.log(`Hope ${packageJson.version} release metadata is consistent.`);

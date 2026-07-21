@@ -20,6 +20,7 @@ import {
   calculateChangeRequestFingerprint,
 } from "../plugins/hope/skills/diff/scripts/collect-change-request.mjs";
 import {
+  formatCleanupHandoff,
   formatRenderPath,
   formatRetentionHandoff,
   loadJsonDocument,
@@ -49,6 +50,11 @@ test("keeps stdout path-only while exposing exact retention handoff metadata", (
     "Hope retention: eligibleAfter=2026-07-26T12:34:56.789Z\n",
   );
   assert.equal(formatRetentionHandoff({ file: "/export/review.html" }), "");
+  assert.match(
+    formatCleanupHandoff({ ...result, cleanupPending: true }),
+    /\$hope:cleanup/u,
+  );
+  assert.equal(formatCleanupHandoff(result), "");
 });
 
 function clone(value) {
@@ -369,6 +375,29 @@ test("renders one HTML and removes both transient inputs on success", async (t) 
   await assert.rejects(lstat(inputs.input), { code: "ENOENT" });
   await assert.rejects(lstat(inputs.contextPath), { code: "ENOENT" });
   await assert.rejects(lstat(inputs.directory), { code: "ENOENT" });
+});
+
+test("keeps a successful review successful when transient cleanup fails", async (t) => {
+  const review = await fixture();
+  const context = contextFor(review);
+  const inputs = await putInputs(t, review, context);
+
+  const result = await main(
+    ["--input", inputs.input, "--context", inputs.contextPath, "--cleanup"],
+    {
+      cleanupTransientInputs: async () => {
+        throw new Error("simulated cleanup failure");
+      },
+      collectChangeRequest: async () => clone(context),
+      readCurrentSnapshot: async () => clone(context),
+    },
+  );
+  t.after(async () => await rm(dirname(result.file), { recursive: true, force: true }));
+
+  assert.equal(result.cleanupPending, true);
+  assert.equal((await lstat(result.file)).isFile(), true);
+  assert.equal((await lstat(inputs.input)).isFile(), true);
+  assert.equal((await lstat(inputs.contextPath)).isFile(), true);
 });
 
 test("validates without rendering or removing retryable inputs", async (t) => {

@@ -1,9 +1,9 @@
 {
   "name": "hope",
-  "version": "0.3.2-alpha",
+  "version": "0.4.0-alpha",
   "private": true,
   "type": "module",
-  "description": "Understand GitHub pull request changes before merge through explanation, a quiz, and an interactive review.",
+  "description": "A small AI work harness with pull request understanding and safe cleanup.",
   "license": "MIT",
   "engines": {
     "node": ">=20"
