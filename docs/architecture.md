@@ -6,6 +6,34 @@ the same code.
 [PRINCIPLES.md](../PRINCIPLES.md) defines the project direction. This document
 describes the current technical shape.
 
+## Two tracks
+
+Hope has two ways to reach the same feature code.
+
+```mermaid
+flowchart LR
+  U1["Harness user"] --> H["Hope harness interface<br/>(future)"]
+  U2["Plugin or skill user"] --> A["Host adapter<br/>Codex today, Claude later"]
+  A --> S["Plugin or skill"]
+  H --> C["Feature commands"]
+  S --> C
+  C --> F["Feature logic"]
+  F --> P["Shared safety rules"]
+  F --> T["Tools and private state"]
+```
+
+The complete Hope harness is the long-term direction. Its product interface
+does not exist yet. The current runtime establishes the feature commands,
+state, and safety rules that the future interface can use.
+
+Plugins and skills remain a supported way to use a feature on its own. They are
+not a temporary copy of the harness. A standalone feature and the harness call
+the same commands.
+
+Not every feature needs both entry points. A feature may exist only in the
+harness when it needs the wider environment. A useful standalone feature may
+also have a plugin or skill entry.
+
 ## Main rule
 
 Host files stay thin. Feature code owns the work.
@@ -20,7 +48,8 @@ flowchart LR
 ```
 
 A future Claude adapter belongs on the left side. It calls the same feature
-commands. It does not copy diff or cleanup logic.
+commands. A future harness interface joins at that boundary. Neither one copies
+diff or cleanup logic.
 
 When diff has no URL, its feature command asks GitHub CLI for the most recently
 created PR in the current repository. This lookup is part of diff, not the host
