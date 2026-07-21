@@ -10,6 +10,40 @@ decisions are made. This file explains how Hope should look, read, and behave.
 A feature contract may add a specific rule, but it must not conflict with this
 file.
 
+## Authority
+
+Each design decision has one owner.
+
+| Source | Owns | Does not own |
+| --- | --- | --- |
+| [PRINCIPLES.md](PRINCIPLES.md) | project direction and product values | visual values and component details |
+| `DESIGN.md` | shared visual, writing, interaction, and accessibility rules | feature data and safety behavior |
+| Feature contract | feature-specific order, content, and behavior | shared visual rules |
+| Source code | the working implementation | a competing design rule |
+| Tests and examples | evidence that the implementation follows the rule | the rule itself |
+
+When sources disagree, the owner in this table wins. Fix the other source in
+the same change when possible. A screenshot, mockup, generated file, or current
+implementation is never a design authority by itself.
+
+Keep this file focused on decisions shared across Hope. Put a rule in a feature
+contract when no other feature needs it.
+
+## Adoption status
+
+The design system and all current Hope Review patterns are `experimental` while
+Hope is alpha.
+
+`DESIGN.md` is the target. The current `hope-review.html` is not a visual
+reference until it follows this file. Its known migration gaps are:
+
+- top-level sections need clearer and more consistent boundaries;
+- vertical spacing is too loose in several places;
+- type sizes and weights do not yet use one complete scale.
+
+Do not copy a current CSS value merely because it already exists. Check this
+file first.
+
 ## The intended experience
 
 Hope is a working document, not a control dashboard.
@@ -46,9 +80,20 @@ A normal Hope page has three layers:
 3. secondary navigation and evidence that stay available without competing
    with the main content.
 
-On a wide screen, the reading column should be about `760px` to `800px` wide.
-A quiet navigation rail may sit beside it. On a narrow screen, the page becomes
-one column and the navigation becomes a compact horizontal list.
+Use these layout tokens:
+
+| Token | Value | Use |
+| --- | ---: | --- |
+| `layout.shell.max` | `1040px` | navigation and reading column together |
+| `layout.reading.max` | `800px` | main reading column |
+| `layout.navigation.width` | `176px` | wide-screen navigation rail |
+| `layout.prose.max` | `68ch` | normal prose line length |
+| `layout.narrow.breakpoint` | `760px` | change to one column |
+| `layout.target.min` | `44px` | important control and navigation target |
+
+On a wide screen, a quiet navigation rail may sit beside the reading column.
+At or below `layout.narrow.breakpoint`, the page becomes one column and the
+navigation becomes a compact horizontal list.
 
 Do not split the main story into several equal dashboard columns. Use two
 columns only for a direct comparison, a control beside its result, or a short
@@ -61,7 +106,7 @@ enough.
 
 Use one of these boundaries:
 
-- a `1px` neutral line above the section; or
+- `border.section` above the section; or
 - one contained workspace around content that is manipulated or compared.
 
 Do not use both unless the section would otherwise be unclear. Do not give each
@@ -79,27 +124,64 @@ Within a section:
 
 Nested cards are a sign that the information structure should be simplified.
 
+## Tokens and implementation
+
+A token gives a small design decision a stable, human-readable name. Choose a
+token by its meaning, not because its current value looks close.
+
+Use names in the form `category.role.state`:
+
+- `color.text.primary`;
+- `color.border.subtle`;
+- `space.section`;
+- `type.body`.
+
+In CSS, prefix the name with `--hope-` and replace dots with hyphens. For
+example, `color.text.primary` becomes `--hope-color-text-primary`. Other hosts
+map the same semantic name to their native format.
+
+Do not use value names such as `green-500`, `gray-2`, or `padding-big` in
+feature code. A semantic name can keep its meaning when a theme or value
+changes.
+
+Each token needs:
+
+- one name;
+- one value or alias;
+- a type;
+- a short purpose;
+- an allowed use;
+- a status when it is deprecated.
+
+Reuse an alias when two roles intentionally share a value. Do not copy the raw
+value into two definitions. Feature CSS uses token-backed custom properties;
+raw shared values belong only in the token definition.
+
+For now, the small token tables in this file are canonical. Do not add a token
+package before a second real surface needs the same values. When that need
+exists, add one DTCG-compatible token file and generate platform values from
+it. The token file then owns values; this file continues to own their meaning
+and use. Never maintain two hand-written token files for different hosts.
+
 ## Spacing
 
-Use a small spacing scale. Do not invent a new value for each component.
+Use a small semantic spacing scale. Do not invent a new value for each
+component.
 
-| Token | Size | Use |
-| --- | ---: | --- |
-| `space-1` | `4px` | icon or label detail |
-| `space-2` | `8px` | tightly related text |
-| `space-3` | `12px` | control content |
-| `space-4` | `16px` | normal element gap |
-| `space-5` | `24px` | card padding or subsection gap |
-| `space-6` | `32px` | large subsection gap |
-| `space-7` | `48px` | mobile section gap |
-| `space-8` | `64px` | desktop section gap |
+| Token | Wide screen | Narrow screen | Use |
+| --- | ---: | ---: | --- |
+| `space.detail` | `4px` | `4px` | icon or label detail |
+| `space.tight` | `8px` | `8px` | tightly related text |
+| `space.control` | `12px` | `12px` | content inside a control |
+| `space.content` | `16px` | `16px` | normal element gap |
+| `space.container` | `24px` | `16px` | card or workspace padding |
+| `space.subsection` | `32px` | `24px` | subsection boundary |
+| `space.section` | `64px` | `48px` | top-level section boundary |
 
 Rules:
 
-- Keep top-level section gaps between `48px` and `64px`.
-- Keep subsection gaps between `24px` and `32px`.
-- Keep normal content gaps between `12px` and `16px`.
-- Keep container padding between `16px` and `24px`.
+- Use the wide or narrow value from the table instead of choosing a value
+  inside a range.
 - Reduce spacing on a narrow screen; do not add space just to fill the page.
 - Avoid adding a parent gap and matching child margins for the same boundary.
 - Large empty areas need a clear reading or interaction purpose.
@@ -112,15 +194,15 @@ technical values.
 
 Use this type scale:
 
-| Role | Desktop | Narrow screen | Weight | Line height |
+| Token | Wide screen | Narrow screen | Weight | Line height |
 | --- | ---: | ---: | ---: | ---: |
-| Page title | `40px` | `34px` | `700` | `1.10` |
-| Section title | `28px` | `26px` | `700` | `1.20` |
-| Subsection title | `20px` | `20px` | `700` | `1.30` |
-| Lead text | `18px` | `18px` | `400` | `1.55` |
-| Body text | `16px` | `16px` | `400` | `1.60` |
-| Small text | `14px` | `14px` | `400` | `1.50` |
-| Label | `12px` | `12px` | `600` | `1.40` |
+| `type.page-title` | `40px` | `34px` | `700` | `1.10` |
+| `type.section-title` | `28px` | `26px` | `700` | `1.20` |
+| `type.subsection-title` | `20px` | `20px` | `700` | `1.30` |
+| `type.lead` | `18px` | `18px` | `400` | `1.55` |
+| `type.body` | `16px` | `16px` | `400` | `1.60` |
+| `type.small` | `14px` | `14px` | `400` | `1.50` |
+| `type.label` | `12px` | `12px` | `600` | `1.40` |
 
 Only use font weights `400`, `600`, and `700`.
 
@@ -135,12 +217,38 @@ Use size and spacing before adding weight. Do not make every label bold. Keep
 body text at a readable `16px`; do not shrink important context to make a page
 look lighter.
 
-Keep prose near `68ch` or less. Use negative letter spacing only on large
-titles. Use wider letter spacing only for short uppercase labels.
+Keep prose at or below `layout.prose.max`. Use negative letter spacing only on
+large titles. Use wider letter spacing only for short uppercase labels.
 
 ## Color and surfaces
 
 Use a neutral page, a neutral panel, and one main accent color.
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `color.text.primary` | `#1d201e` | normal text |
+| `color.text.secondary` | `#686d69` | supporting text |
+| `color.surface.page` | `#f7f7f5` | page background |
+| `color.surface.panel` | `#ffffff` | contained workspace |
+| `color.border.subtle` | `#dfe1dd` | normal separator |
+| `color.border.strong` | `#c8cbc6` | stronger neutral boundary |
+| `color.accent` | `#2b6655` | link, focus, selection, progress, main action |
+| `color.accent.soft` | `#e8f1ed` | quiet selected surface |
+| `color.state.declared` | `#315fa8` | author-declared claim |
+| `color.state.observed` | `#17633f` | observed claim and success |
+| `color.state.inferred` | `#7a5314` | inferred claim and warning |
+| `color.state.unknown` | `#963d37` | unknown claim |
+| `color.state.danger` | `#9c342f` | destructive or failed state |
+
+`color.state.success` aliases `color.state.observed`.
+`color.state.warning` aliases `color.state.inferred`. A soft state surface may
+be added only with a tested text-and-background contrast pair.
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `border.section` | `1px solid color.border.subtle` | section and subsection boundary |
+| `focus.ring` | `3px solid color.accent` | keyboard focus indicator |
+| `focus.offset` | `3px` | space between control and focus ring |
 
 - Use the accent for links, selection, focus, progress, and the main action.
 - Use semantic colors only for states such as success, warning, danger,
@@ -155,9 +263,48 @@ page.
 
 Use three corner sizes at most:
 
-- `6px` for small code or status elements;
-- `10px` for controls and cards;
-- `16px` for a large interactive workspace.
+- `radius.small`: `6px` for small code or status elements;
+- `radius.control`: `10px` for controls and cards;
+- `radius.workspace`: `16px` for a large interactive workspace.
+
+## Component lifecycle
+
+A shared component or pattern has one visible status.
+
+| Status | Meaning |
+| --- | --- |
+| `experimental` | useful in a real flow, but behavior or API may still change |
+| `supported` | documented, tested, accessible, and safe for normal reuse |
+| `deprecated` | kept for migration only; a replacement and removal plan exist |
+
+A component moves to `supported` only when it has:
+
+- a real user need and at least one working use;
+- a purpose that an existing component does not already serve;
+- design, content, code, and usage guidance that agree;
+- tested keyboard, responsive, long-content, and accessibility behavior;
+- clear states, tokens, and boundaries;
+- an owner and a way to report a problem.
+
+Do not silently remove or rename a supported component or token. Mark it
+deprecated, name the replacement, explain the migration, and remove it only in
+a planned breaking change.
+
+When a pattern becomes reusable across features, document it with this record:
+
+1. name and status;
+2. user problem and purpose;
+3. when to use and when not to use;
+4. anatomy and states;
+5. content and interaction rules;
+6. keyboard and responsive behavior;
+7. tokens and allowed variants;
+8. accessibility evidence and known limits;
+9. working examples and tests;
+10. owner, change history, and replacement when deprecated.
+
+Keep executable examples and component tests near the implementation. Link to
+them from the record instead of copying code into this file.
 
 ## Components
 
@@ -167,7 +314,7 @@ Navigation shows location; it does not compete with the document title.
 
 - Keep inactive items quiet.
 - Mark the current section with one accent line and clear text.
-- Keep each target at least `44px` high.
+- Keep each target at least `layout.target.min` high.
 - Preserve the document order on every screen size.
 
 ### Cards
@@ -259,15 +406,21 @@ Use short sentences and familiar words. Give each sentence one main idea.
 
 ## Responsive and accessible behavior
 
-- Use one column below `760px` unless a small direct comparison still fits.
+- Use WCAG 2.2 Level AA as the minimum target. Do not claim conformance without
+  recorded test evidence for the rendered result.
+- Use one column at or below `layout.narrow.breakpoint` unless a small direct
+  comparison still fits.
 - Do not create horizontal page scrolling. A wide table or code sample may
   scroll inside its own region.
-- Keep controls and navigation targets at least `44px` by `44px`.
-- Show a strong keyboard focus indicator.
+- Keep important controls and navigation targets at least
+  `layout.target.min` by `layout.target.min`.
+- Use `focus.ring` and `focus.offset` for keyboard focus. Keep sticky
+  navigation from covering the focused item.
 - Keep the reading order and keyboard order the same.
 - Give form controls clear labels and state feedback.
 - Respect reduced-motion settings.
 - Keep the document useful without animation.
+- Verify that text can grow to `200%` without losing content or function.
 
 ## Hope Review pattern
 
@@ -306,20 +459,88 @@ Before shipping a user-facing change, check:
 If the answer is no, simplify the page before adding another style or
 component.
 
-## Changing this system
+## Governance
 
-Update this file when a design rule should apply across Hope. Keep a rule near
-a feature when it is specific to that feature.
+The project maintainer owns this file today. More contributors may help later,
+but ownership must stay explicit.
+
+Start with what exists. Add a shared token, component, or pattern only when it
+is:
+
+- useful for a real Hope flow;
+- different from an existing solution;
+- consistent with current tokens and patterns;
+- tested with the people, content, devices, and assistive behavior it affects;
+- flexible enough for every use that is already known.
+
+A design change should include:
+
+1. the user problem and evidence;
+2. the visible before and after behavior;
+3. the rule, token, or component that owns the decision;
+4. every affected implementation;
+5. tests and manual checks;
+6. a migration or deprecation note when an old rule was public or supported.
+
+Update this file in the same pull request when a rule should apply across
+Hope. Update a feature contract instead when the rule is specific to one
+feature. Keep documentation and implementation changes together when
+practical so neither becomes a second truth.
 
 Add a new spacing value, type style, color, radius, or component only when an
 existing rule cannot express a real user need. A one-off visual preference is
 not enough.
+
+Git history records changes to this experimental system. Add a separate design
+changelog only when released consumers need migration notes outside the normal
+project changelog.
+
+## Definition of done
+
+A user-facing design change is done when:
+
+- this file and every affected feature contract agree;
+- the implementation uses the defined tokens and component rules;
+- English and Korean content use the same hierarchy and remain readable;
+- long titles, paths, evidence, and untrusted text do not break the layout;
+- wide and narrow layouts have been checked;
+- keyboard order, focus, labels, state feedback, and reduced motion work;
+- text contrast, control contrast, `200%` text growth, and page reflow have
+  been checked;
+- the offline and security boundaries still hold;
+- deterministic tests pass;
+- one real generated result has been reviewed by a person.
+
+Record what was actually checked. An unchecked item is a known limit, not an
+implied pass.
 
 ## Research references
 
 These sources informed the rules above. They are useful context, not Hope's
 authority.
 
+- [Design Tokens Format Module 2025.10](https://www.designtokens.org/tr/2025.10/format/)
+  informed typed tokens, descriptions, aliases, groups, and explicit
+  deprecation metadata. Hope will adopt its file format only when a real second
+  token consumer exists.
+- [Atlassian design tokens](https://atlassian.design/tokens/design-tokens)
+  informed semantic names and choosing a token by meaning instead of its
+  current value.
+- [Atlassian release phases](https://atlassian.design/release-phases) informed
+  explicit experimental, supported, and deprecated states with a migration
+  path.
+- [GOV.UK contribution criteria](https://design-system.service.gov.uk/community/contribution-criteria/)
+  informed the useful, unique, consistent, tested, accessible, and versatile
+  checks for shared patterns.
+- [Carbon component checklist](https://carbondesignsystem.com/contributing/component-checklist/)
+  informed one definition of done across design, code, documentation, and
+  reusable assets.
+- [Storybook component documentation](https://storybook.js.org/docs/writing-docs/index)
+  informed keeping executable examples and generated API facts close to the
+  component implementation.
+- [WCAG 2.2](https://www.w3.org/TR/WCAG22/) defines Hope's minimum web
+  accessibility target and the checks for contrast, reflow, focus, and target
+  behavior.
 - [CodeRabbit PR Walkthroughs](https://docs.coderabbit.ai/pr-reviews/walkthroughs)
   informed the grouped walkthrough and conditional diagram structure.
 - [Linear: How we redesigned the Linear UI](https://linear.app/now/how-we-redesigned-the-linear-ui)
