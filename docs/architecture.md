@@ -3,7 +3,8 @@
 Hope is a useful plugin now and a growing harness inside. These are two views of
 the same code.
 
-[PRINCIPLES.md](../PRINCIPLES.md) defines the project direction. This document
+[PRINCIPLES.md](../PRINCIPLES.md) defines the project direction.
+[DESIGN.md](../DESIGN.md) defines the user-facing design. This document
 describes the current technical shape.
 
 ## Two tracks

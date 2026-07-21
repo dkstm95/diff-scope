@@ -6,7 +6,10 @@ on one implementation.
 Read [PRINCIPLES.md](PRINCIPLES.md) before making a project-wide design
 decision.
 
-## Design rules
+Read [DESIGN.md](DESIGN.md) before changing a user-facing interface, command
+message, or generated document.
+
+## Code design rules
 
 - Use plain names and short sentences.
 - Name code after the feature or data it represents.

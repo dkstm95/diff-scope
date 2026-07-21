@@ -13,8 +13,9 @@ Hope is a Codex plugin today and a growing harness inside.
 The plugin stays useful while the harness is built. Both use the same code.
 There is no second implementation to keep in sync.
 
-See [PRINCIPLES.md](PRINCIPLES.md) for Hope's long-term direction and the rules
-used to make project decisions.
+See [PRINCIPLES.md](PRINCIPLES.md) for Hope's long-term direction and project
+decisions. See [DESIGN.md](DESIGN.md) for the shared visual, writing, and
+interaction rules.
 
 > **Alpha:** `v0.4.0-alpha` has two skills: `diff` and `cleanup`. The internal
 > harness is new and may change quickly.

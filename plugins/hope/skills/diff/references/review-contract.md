@@ -73,18 +73,10 @@ The review is a learning aid for a human with less working memory and code
 context than the generator. Completeness of the internal analysis does not
 justify exposing every internal note on the default page.
 
-- Present the review as one calm reading surface. Use one main reading column;
-  wide screens may add a quiet navigation rail, while narrow screens keep the
-  same chapter order in a compact horizontal navigation.
-- Create hierarchy with type size, spacing, and thin separators before adding
-  a container. Do not give every chapter its own color or card. Use color only
-  to show meaning, selection, warning, or action.
-- Give a contained workspace only to content that benefits from direct
-  manipulation or comparison, such as the system map and microworld. Keep the
-  overview, code walkthrough, quiz, and evidence in the reading flow.
-- Keep the changed-file label beside its explanation on wide screens so the
-  reader can follow code in execution order without losing context. Put exact
-  excerpts behind evidence disclosures until the reader asks for them.
+Project-wide visual hierarchy, spacing, typography, color, and interaction
+rules live in [DESIGN.md](../../../../../DESIGN.md). This contract adds only
+the diff-specific information rules below.
+
 - Give each important idea one primary teaching location. Do not restate the
   same input change, size-handling rule, snapshot check, or output format in the
   overview, visual, flow, synthesis, code walkthrough, and microworld.
