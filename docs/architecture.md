@@ -3,6 +3,9 @@
 Hope is a useful plugin now and a growing harness inside. These are two views of
 the same code.
 
+[PRINCIPLES.md](../PRINCIPLES.md) defines the project direction. This document
+describes the current technical shape.
+
 ## Main rule
 
 Host files stay thin. Feature code owns the work.

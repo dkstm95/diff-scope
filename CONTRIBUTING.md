@@ -3,6 +3,9 @@
 Hope is a plugin today and a harness that grows from real work. Keep both paths
 on one implementation.
 
+Read [PRINCIPLES.md](PRINCIPLES.md) before making a project-wide design
+decision.
+
 ## Design rules
 
 - Use plain names and short sentences.
