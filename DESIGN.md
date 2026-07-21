@@ -38,11 +38,38 @@ Hope is alpha.
 reference until it follows this file. Its known migration gaps are:
 
 - top-level sections need clearer and more consistent boundaries;
+- the first screen does not yet show every required trust fact in one place;
 - vertical spacing is too loose in several places;
 - type sizes and weights do not yet use one complete scale.
 
 Do not copy a current CSS value merely because it already exists. Check this
 file first.
+
+## Hope identity
+
+Hope is an observation note for work done with AI. It should feel like a
+carefully kept notebook: calm, compact, clear about evidence, and easy to scan.
+It should not feel like a control dashboard or a decorated report.
+
+The observation idea is a visual mood, not the language of the interface.
+Use familiar labels such as **Summary**, **Risks**, **Not checked**, and
+**Evidence**. Do not make users learn metaphorical labels such as
+**Observatory**, **Coordinates**, or **Field station**.
+
+A Hope artifact should be recognizable by the same quiet signals:
+
+- a neutral paper-like page and the Hope green accent;
+- a compact header and summary before the detail;
+- numbered sections with a full-width thin line;
+- one plain title and one-line summary for each top-level section;
+- a visible trail from a claim to its evidence;
+- clear labels for what is known, inferred, unknown, or not checked.
+
+A small telescope mark, thin observation line, or coordinate-style mark may
+appear as a quiet signature. It must not carry meaning, replace a label, or
+repeat throughout the page as decoration. Prefer one mark in the artifact
+header or footer. Structure and restraint create the identity; ornament does
+not.
 
 ## The intended experience
 
@@ -73,12 +100,13 @@ content needs a clear boundary that the earlier tools cannot provide.
 
 ## Page structure
 
-A normal Hope page has three layers:
+A normal Hope artifact has four layers:
 
-1. a compact introduction that states the result and important trust facts;
-2. one main reading column in task order;
-3. secondary navigation and evidence that stay available without competing
-   with the main content.
+1. a compact artifact header;
+2. a first-screen summary that states the result and important trust facts;
+3. one feature-specific body in task order;
+4. secondary navigation, evidence, and technical detail that stay available
+   without competing with the main content.
 
 Use these layout tokens:
 
@@ -99,18 +127,102 @@ Do not split the main story into several equal dashboard columns. Use two
 columns only for a direct comparison, a control beside its result, or a short
 label beside a longer explanation.
 
+## Shared artifact frame
+
+Every generated Hope artifact meant for human reading uses the same outer
+frame. Machine-readable data and short terminal messages do not need this
+frame. The frame gives a new feature a familiar reading path without forcing
+every feature to have the same body.
+
+```text
+┌──────────────────────────────────────────────────┐
+│ Hope · Artifact              State · Scope · Source │
+├──────────────────────────────────────────────────┤
+│ One-sentence result                              │
+│ Key changes · Judgment points · Not checked      │
+├──────────────────────────────────────────────────┤
+│ 01  Plain section title                          │
+│     One-line section summary                     │
+│     Feature-specific content                     │
+├──────────────────────────────────────────────────┤
+│ 02  Plain section title                          │
+│     One-line section summary                     │
+│     Feature-specific content                     │
+├──────────────────────────────────────────────────┤
+│ Evidence · Original sources · Technical detail   │
+└──────────────────────────────────────────────────┘
+```
+
+### Artifact header
+
+Keep the header compact. It contains:
+
+- the Hope name or mark;
+- the artifact or feature name;
+- the current state and scope;
+- a link or label for the original source when one exists.
+
+Do not turn the header into a toolbar. Put optional actions after the reading
+context or in a quiet secondary area.
+
+### First-screen summary
+
+Before the first top-level section, show these four facts without requiring a
+click or scroll at `1280px` by `800px` and `100%` zoom:
+
+1. one sentence that states the result;
+2. the key changes or findings;
+3. the risks, open questions, or points that need human judgment;
+4. what Hope did not check and the limit of the artifact's scope.
+
+Keep this area as one compact reading block or list. Do not make four equal
+dashboard cards. If a fact has no items, say **None found** or **Not checked**
+instead of hiding the category.
+
+On a smaller screen, preserve the same order and content. The no-scroll rule
+does not apply below `layout.narrow.breakpoint`.
+
+### Feature body
+
+The middle of the artifact belongs to the feature. A review, cleanup result,
+setup guide, and future feature may use different sections and interactions.
+Each top-level section should answer one main question. Its title acts as a
+short cue, its one-line summary gives the answer, and later content adds the
+detail.
+
+Start with a compressed view and reveal detail in layers. Keep one main idea
+in each section. This makes an artifact easy to scan without removing the
+evidence needed for a careful reading.
+
+### Evidence ending
+
+End with the evidence, original sources, and technical details used by the
+artifact. Supporting detail may begin collapsed, but the user must be able to
+trace important claims back to it.
+
 ## Section boundaries
 
 Every top-level section must have a visible boundary. Whitespace alone is not
 enough.
 
-Use one of these boundaries:
+The default top-level section starts with this shared signature:
 
-- `border.section` above the section; or
-- one contained workspace around content that is manipulated or compared.
+1. `border.section` across the full reading width;
+2. a two-digit reading-order number such as `01`;
+3. one plain title;
+4. one sentence that summarizes the section.
 
-Do not use both unless the section would otherwise be unclear. Do not give each
-section a different background color.
+The number, title, and summary stay together. A small coordinate-style mark
+may sit beside the number, but it must not replace the number or communicate a
+state. Use the number only to show reading order.
+
+Use one of these content boundaries after the signature:
+
+- the normal reading flow; or
+- one contained workspace when content is manipulated or directly compared.
+
+Do not add another strong container around normal reading content. Do not give
+each section a different background color.
 
 Use the same neutral line color throughout the page. A colored border is
 reserved for a selected item, warning, error, or other meaningful state.
@@ -174,9 +286,9 @@ component.
 | `space.tight` | `8px` | `8px` | tightly related text |
 | `space.control` | `12px` | `12px` | content inside a control |
 | `space.content` | `16px` | `16px` | normal element gap |
-| `space.container` | `24px` | `16px` | card or workspace padding |
-| `space.subsection` | `32px` | `24px` | subsection boundary |
-| `space.section` | `64px` | `48px` | top-level section boundary |
+| `space.container` | `20px` | `16px` | card or workspace padding |
+| `space.subsection` | `24px` | `20px` | subsection boundary |
+| `space.section` | `48px` | `40px` | top-level section boundary |
 
 Rules:
 
@@ -251,6 +363,11 @@ be added only with a tested text-and-background contrast pair.
 | `focus.offset` | `3px` | space between control and focus ring |
 
 - Use the accent for links, selection, focus, progress, and the main action.
+- Use `color.surface.page`, `color.accent`, and thin neutral lines as Hope's
+  main visual signature.
+- Render an optional observation mark with `color.text.secondary` or
+  `color.border.strong`. Use the accent only when the mark also identifies the
+  current or selected item.
 - Use semantic colors only for states such as success, warning, danger,
   observed, inferred, or unknown.
 - Never use color only for decoration or to distinguish chapters.
@@ -424,7 +541,8 @@ Use short sentences and familiar words. Give each sentence one main idea.
 
 ## Hope Review pattern
 
-The diff result follows this order:
+A diff result starts with the shared artifact header and first-screen summary.
+Its feature-specific body then follows this order:
 
 1. what changed and the limits of the review;
 2. the system map and points that need human judgment;
@@ -444,6 +562,10 @@ This order is defined in more detail by the
 
 Before shipping a user-facing change, check:
 
+- Does the first screen show the result, key changes, judgment points, and
+  scope limits?
+- Does every top-level section use a line, number, plain title, and one-line
+  summary?
 - Can the user tell where every top-level section starts and ends?
 - Is any boundary relying on whitespace alone?
 - Are section and subsection gaps taken from the spacing scale?
@@ -453,6 +575,11 @@ Before shipping a user-facing change, check:
 - Does every use of color communicate meaning?
 - Is the main reading path clear before secondary detail is opened?
 - Does every visual or interaction do a distinct comprehension job?
+- Are labels literal and familiar instead of relying on the observation
+  metaphor?
+- Are telescope or coordinate marks quiet, optional, and free of meaning?
+- Does the feature body fit its task instead of copying another feature's
+  chapters?
 - Does the page work at a narrow width and with a keyboard?
 - Does the language distinguish fact, inference, and missing verification?
 
@@ -501,6 +628,8 @@ A user-facing design change is done when:
 
 - this file and every affected feature contract agree;
 - the implementation uses the defined tokens and component rules;
+- the first screen and one full top-level section have been checked against the
+  shared artifact frame;
 - English and Korean content use the same hierarchy and remain readable;
 - long titles, paths, evidence, and untrusted text do not break the layout;
 - wide and narrow layouts have been checked;
@@ -557,3 +686,10 @@ authority.
 - [GOV.UK guidance for accessible documents](https://www.gov.uk/guidance/publishing-accessible-documents)
   informed the preference for clear HTML, meaningful headings, simple tables,
   readable contrast, and text that remains complete without images.
+- [Cornell Note Taking System](https://lsc.cornell.edu/how-to-study/taking-notes/cornell-note-taking-system/)
+  informed the use of short cues, one main note area, and a compact summary.
+- [Progressive Summarization](https://fortelabs.com/blog/progressive-summarization-vi-core-principles-of-knowledge-capture/)
+  informed showing a compressed view first while keeping deeper detail
+  discoverable.
+- [Evergreen notes](https://notes.andymatuschak.org/About_these_notes?stackedNotes=z5E5QawiXCMbtNtupvxeoEX&stackedNotes=zNUaiGAXp21eorsER1Jm9yU)
+  informed sharp titles and one primary idea per section.
