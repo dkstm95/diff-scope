@@ -12,20 +12,30 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
         with:
           node-version: 20
+      - name: Check release commit
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "${GITHUB_SHA}" refs/remotes/origin/main
       - run: npm run check
       - name: Build plugin
         run: |
           npm run build:plugin
           git diff --exit-code -- plugins/hope
+      - name: Stage plugin package
+        run: node tools/stage-plugin.mjs "${RUNNER_TEMP}/hope-package"
       - name: Package plugin
-        working-directory: plugins/hope
-        run: zip -r "../../hope-${GITHUB_REF_NAME}.zip" .
+        working-directory: ${{ runner.temp }}/hope-package
+        run: zip -r "${GITHUB_WORKSPACE}/hope-${GITHUB_REF_NAME}.zip" .
       - name: Check package root
         run: |
+          unzip -Z1 "hope-${GITHUB_REF_NAME}.zip" | sed '/\/$/d' | sort > "${RUNNER_TEMP}/plugin-package-files.txt"
+          diff -u tools/plugin-package-files.txt "${RUNNER_TEMP}/plugin-package-files.txt"
           unzip -p "hope-${GITHUB_REF_NAME}.zip" .claude-plugin/plugin.json > /dev/null
           unzip -p "hope-${GITHUB_REF_NAME}.zip" .codex-plugin/plugin.json > /dev/null
           unzip -p "hope-${GITHUB_REF_NAME}.zip" skills/diff/SKILL.md > /dev/null

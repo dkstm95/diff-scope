@@ -67,6 +67,9 @@ claude plugin install hope@hope
 `npm run build:plugin`은 패키지 사본을 갱신한다. 배포 검사는 모든 생성 파일을
 원본과 비교하므로 두 번째 구현이나 SSOT가 될 수 없다.
 
+원본을 바꿀 때는 다시 만든 패키지 사본도 함께 커밋한다. 원본만 바꾸어 푸시하면
+이전 플러그인이 조용히 배포되는 대신 검증이 실패한다.
+
 ## 개발
 
 별도 패키지 설치는 필요하지 않다.
@@ -74,6 +77,17 @@ claude plugin install hope@hope
 ```bash
 npm run check
 ```
+
+릴리스 준비는 한 명령으로 한다. 버전 앞에 `v`를 붙이지 않는다.
+
+```bash
+npm run release:prepare -- 0.4.1-alpha
+```
+
+이 명령은 패키지와 두 플러그인 설정의 버전을 함께 바꾸고, 패키지 사본을 다시
+만든 뒤 모든 검사를 실행한다. 변경을 검토하고 커밋한 다음 같은 버전의
+`v0.4.1-alpha` 태그를 만든다. 릴리스에는 `tools/plugin-package-files.txt`에
+적힌 파일만 들어가며, 태그의 커밋은 이미 `main`에 포함되어 있어야 한다.
 
 ## 라이선스
 

@@ -55,6 +55,11 @@ the release check requires byte-for-byte generated content. Never edit a
 generated copy by hand. The package includes every Hope file it uses, but its
 JavaScript commands still require Node.js 20 or newer.
 
+`tools/plugin-package-files.txt` is the explicit release boundary. The release
+copies only those files into a new staging directory before creating the zip.
+An unrelated or temporary file under `plugins/hope/` cannot enter a release by
+accident.
+
 The package has two host manifests:
 
 ```text
