@@ -1,14 +1,19 @@
 {
   "name": "hope",
-  "version": "0.3.2-alpha",
+  "version": "0.4.0-alpha",
   "private": true,
   "type": "module",
-  "description": "Understand GitHub pull request changes before merge through explanation, a quiz, and an interactive review.",
+  "description": "An AI work harness with independent harness and plugin entry points.",
   "license": "MIT",
   "engines": {
     "node": ">=20"
   },
+  "bin": {
+    "hope": "./harness/hope.mjs"
+  },
   "scripts": {
+    "build:plugin": "node tools/build-plugin.mjs",
+    "hope": "node harness/hope.mjs",
     "test": "node --test",
     "check:release": "node tools/check-release.mjs",
     "check": "npm run check:release && npm test"

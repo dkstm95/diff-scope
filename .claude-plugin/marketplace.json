@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "hope",
+  "description": "Hope plugins for understanding and working with code changes.",
+  "owner": {
+    "name": "SeungIl"
+  },
+  "plugins": [
+    {
+      "name": "hope",
+      "source": "./plugins/hope",
+      "description": "Adds Hope skills to Claude Code. Requires Node.js 20 or newer. Hope diff currently reports its rebuild status.",
+      "author": {
+        "name": "SeungIl"
+      },
+      "homepage": "https://github.com/dkstm95/hope#readme",
+      "repository": "https://github.com/dkstm95/hope",
+      "license": "MIT",
+      "keywords": ["harness", "diff", "pull-request", "code-understanding"],
+      "category": "development"
+    }
+  ]
+}

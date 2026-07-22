@@ -17,9 +17,18 @@ jobs:
         with:
           node-version: 20
       - run: npm run check
-      - name: Package plugin
+      - name: Build plugin
         run: |
-          zip -r "hope-${GITHUB_REF_NAME}.zip" plugins/hope
+          npm run build:plugin
+          git diff --exit-code -- plugins/hope
+      - name: Package plugin
+        working-directory: plugins/hope
+        run: zip -r "../../hope-${GITHUB_REF_NAME}.zip" .
+      - name: Check package root
+        run: |
+          unzip -p "hope-${GITHUB_REF_NAME}.zip" .claude-plugin/plugin.json > /dev/null
+          unzip -p "hope-${GITHUB_REF_NAME}.zip" .codex-plugin/plugin.json > /dev/null
+          unzip -p "hope-${GITHUB_REF_NAME}.zip" skills/diff/SKILL.md > /dev/null
           sha256sum "hope-${GITHUB_REF_NAME}.zip" > "hope-${GITHUB_REF_NAME}.zip.sha256"
       - name: Create prerelease
         env:
@@ -29,5 +38,5 @@ jobs:
           "hope-${GITHUB_REF_NAME}.zip"
           "hope-${GITHUB_REF_NAME}.zip.sha256"
           --title "Hope ${GITHUB_REF_NAME}"
-          --notes-file CHANGELOG.md
+          --generate-notes
           --prerelease

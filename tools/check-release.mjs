@@ -1,237 +1,133 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 
 import {
-  MAX_INSPECTION_OUTPUT_BYTES,
-} from "../plugins/hope/skills/diff/scripts/lib/inspection-pages.mjs";
+  expectedPluginFile,
+  pluginBundleEntries,
+} from "./build-plugin.mjs";
 
 const root = new URL("../", import.meta.url);
-const fromRoot = (relativePath) => new URL(relativePath, root);
-const read = async (relativePath) => await readFile(fromRoot(relativePath), "utf8");
-const readJson = async (relativePath) => JSON.parse(await read(relativePath));
-const currentVersion = "0.3.2-alpha";
+const fromRoot = (path) => new URL(path, root);
+const read = async (path) => await readFile(fromRoot(path), "utf8");
+const readJson = async (path) => JSON.parse(await read(path));
+const currentVersion = "0.4.0-alpha";
 
 const requiredFiles = [
   ".agents/plugins/marketplace.json",
+  ".claude-plugin/marketplace.json",
+  "docs/architecture.md",
+  "docs/diff.md",
+  "features/diff/cli.mjs",
+  "features/diff/index.mjs",
+  "harness/hope.mjs",
+  "plugins/hope/.claude-plugin/plugin.json",
   "plugins/hope/.codex-plugin/plugin.json",
   "plugins/hope/LICENSE",
   "plugins/hope/assets/telescope.svg",
+  "plugins/hope/docs/diff.md",
+  "plugins/hope/runtime/diff/cli.mjs",
+  "plugins/hope/runtime/diff/index.mjs",
   "plugins/hope/skills/diff/SKILL.md",
   "plugins/hope/skills/diff/agents/openai.yaml",
   "plugins/hope/skills/diff/assets/telescope.svg",
-  "plugins/hope/skills/diff/references/change-request-v1.schema.json",
-  "plugins/hope/skills/diff/references/review-model-v1.schema.json",
-  "plugins/hope/skills/diff/references/review-contract.md",
-  "plugins/hope/skills/diff/scripts/collect-change-request.mjs",
-  "plugins/hope/skills/diff/scripts/inspect-change-request.mjs",
-  "plugins/hope/skills/diff/scripts/render-review.mjs",
-  "plugins/hope/skills/diff/scripts/lib/inspection-pages.mjs",
-  "plugins/hope/skills/diff/scripts/lib/safety.mjs",
-  "plugins/hope/skills/diff/scripts/lib/validate-review.mjs",
-  "plugins/hope/skills/diff/scripts/lib/render-review.mjs",
-  "plugins/hope/skills/diff/scripts/lib/review-retention.mjs",
+  "PRINCIPLES.md",
   "README.md",
   "README.ko.md",
-  "CHANGELOG.md",
   "SECURITY.md",
+  "CONTRIBUTING.md",
   "LICENSE",
 ];
 
-const retiredFiles = [
-  "plugins/hope/skills/align",
-  "plugins/hope/skills/diff/references/artifact-contract.md",
-  "plugins/hope/skills/diff/references/artifact-v2.schema.json",
-  "plugins/hope/skills/diff/references/change-context-v2.schema.json",
-  "plugins/hope/skills/diff/scripts/collect-change-context.mjs",
-  "plugins/hope/skills/diff/scripts/render-diff.mjs",
-  "plugins/hope/skills/diff/scripts/lib/validate-artifact.mjs",
-  "plugins/hope/skills/diff/scripts/lib/render-artifact.mjs",
+const retiredPaths = [
+  "DESIGN.md",
+  "docs/design-research.md",
+  "plugins/hope/runtime/cleanup/cleanup-plan.mjs",
+  "plugins/hope/runtime/diff/diff-run.mjs",
+  "plugins/hope/runtime/diff/latest-pull-request.mjs",
+  "plugins/hope/skills/cleanup/SKILL.md",
+  "plugins/hope/skills/diff/references/change-request-v1.schema.json",
+  "plugins/hope/skills/diff/references/review-model-v1.schema.json",
+  "plugins/hope/skills/diff/scripts/hope-diff.mjs",
 ];
 
-await Promise.all(requiredFiles.map(async (file) => await access(fromRoot(file))));
-await Promise.all(
-  retiredFiles.map(async (file) => {
-    await assert.rejects(access(fromRoot(file)), undefined, `${file} must not ship`);
-  }),
-);
+await Promise.all(requiredFiles.map(async (path) => await access(fromRoot(path))));
+await Promise.all(retiredPaths.map(async (path) => {
+  await assert.rejects(access(fromRoot(path)), undefined, `${path} must not ship`);
+}));
 
-const skillDirectories = (await readdir(fromRoot("plugins/hope/skills/"), {
-  withFileTypes: true,
-}))
-  .filter((entry) => entry.isDirectory())
-  .map((entry) => entry.name)
-  .sort();
-assert.deepEqual(skillDirectories, ["diff"]);
+for (const entry of pluginBundleEntries) {
+  assert.equal(
+    await read(entry.destination),
+    await expectedPluginFile(entry),
+    `${entry.destination} must be rebuilt from ${entry.source}`,
+  );
+}
 
 const [
   packageJson,
-  plugin,
-  marketplace,
-  changeRequestSchema,
-  reviewModelSchema,
-  reviewContract,
-  diffSkill,
-  diffOpenAi,
-  diffInspector,
-  reviewRetention,
-  contributing,
+  codexPlugin,
+  claudePlugin,
+  codexMarketplace,
+  claudeMarketplace,
+  skill,
+  architecture,
+  diff,
+  release,
   readme,
   readmeKo,
-  changelog,
-  security,
-  releaseWorkflow,
-] = await Promise.all([
-  readJson("package.json"),
-  readJson("plugins/hope/.codex-plugin/plugin.json"),
-  readJson(".agents/plugins/marketplace.json"),
-  readJson("plugins/hope/skills/diff/references/change-request-v1.schema.json"),
-  readJson("plugins/hope/skills/diff/references/review-model-v1.schema.json"),
-  read("plugins/hope/skills/diff/references/review-contract.md"),
-  read("plugins/hope/skills/diff/SKILL.md"),
-  read("plugins/hope/skills/diff/agents/openai.yaml"),
-  read("plugins/hope/skills/diff/scripts/inspect-change-request.mjs"),
-  read("plugins/hope/skills/diff/scripts/lib/review-retention.mjs"),
-  read("CONTRIBUTING.md"),
-  read("README.md"),
-  read("README.ko.md"),
-  read("CHANGELOG.md"),
-  read("SECURITY.md"),
-  read(".github/workflows/release.yml"),
-]);
+] =
+  await Promise.all([
+    readJson("package.json"),
+    readJson("plugins/hope/.codex-plugin/plugin.json"),
+    readJson("plugins/hope/.claude-plugin/plugin.json"),
+    readJson(".agents/plugins/marketplace.json"),
+    readJson(".claude-plugin/marketplace.json"),
+    read("plugins/hope/skills/diff/SKILL.md"),
+    read("docs/architecture.md"),
+    read("docs/diff.md"),
+    read(".github/workflows/release.yml"),
+    read("README.md"),
+    read("README.ko.md"),
+  ]);
 
-assert.equal(packageJson.name, "hope");
 assert.equal(packageJson.version, currentVersion);
-assert.equal(packageJson.version, plugin.version);
-assert.equal(plugin.name, "hope");
-assert.equal(plugin.repository, "https://github.com/dkstm95/hope");
-assert.equal(plugin.skills, "./skills/");
-assert.equal(plugin.interface.displayName, "Hope");
-assert.match(plugin.description, /pull request/u);
-assert.ok(plugin.interface.defaultPrompt.some((prompt) => prompt.includes("$hope:diff")));
-assert.doesNotMatch(JSON.stringify(plugin), /\balign\b|\bIntentV1\b/u);
-
-assert.equal(marketplace.name, "hope");
-assert.equal(marketplace.interface.displayName, "Hope");
-assert.ok(
-  marketplace.plugins.some(
-    (entry) => entry.name === "hope" && entry.source.path === "./plugins/hope",
-  ),
-);
-
-assert.match(diffSkill, /^---\r?\nname: diff\r?\ndescription: /u);
-assert.match(diffSkill, /\$hope:diff/u);
-assert.match(diffSkill, /collect-change-request\.mjs --url/u);
-assert.match(diffSkill, /inspect-change-request\.mjs --context <change-request\.json> --summary/u);
-assert.match(diffSkill, /inspect-change-request\.mjs --context <change-request\.json> --pass <pass-id>/u);
-assert.match(diffSkill, /--after <receipt>/u);
-assert.match(diffSkill, /page\.hasNext/u);
-assert.match(diffSkill, /analysisPlan/u);
-assert.match(diffSkill, /analysisCoverage/u);
-assert.match(diffSkill, /top-level `locale`[\s\S]*`ko` or `en`/u);
-assert.match(diffSkill, /4,000 changed lines/u);
-assert.match(diffSkill, /64\s+KiB/u);
-assert.match(diffSkill, /--validate-only/u);
-assert.match(diffSkill, /render-review\.mjs --input/u);
-assert.match(diffSkill, /--cleanup/u);
-assert.match(diffSkill, /render-review\.mjs --context <change-request\.json> --cleanup/u);
-assert.match(diffSkill, /hope-review\.html/u);
-assert.doesNotMatch(
-  `${diffSkill}\n${diffOpenAi}`,
-  /\$hope:align|IntentV1|artifact\.json|explanation\.md|collect-change-context|render-diff/u,
-);
-assert.match(diffOpenAi, /\$hope:diff/u);
-assert.match(diffInspector, /--summary/u);
-assert.match(diffInspector, /--pass/u);
-assert.match(diffInspector, /--after/u);
-assert.match(diffInspector, /MAX_INSPECTION_OUTPUT_BYTES/u);
-assert.match(diffInspector, /validateChangeRequest/u);
-assert.match(reviewRetention, /DEFAULT_REVIEW_RETENTION_MS\s*=\s*7\s*\*/u);
-assert.match(reviewRetention, /MANAGED_REVIEW_MARKER/u);
-assert.match(reviewRetention, /parseManagedReviewMarker/u);
-assert.match(reviewRetention, /stickySharedRoot/u);
-assert.match(reviewRetention, /currentUid/u);
-assert.match(reviewRetention, /isSymbolicLink/u);
-assert.doesNotMatch(reviewRetention, /birthtimeMs|ctimeMs|mtimeMs/u);
-assert.match(reviewContract, /analysisPlan/u);
-assert.match(reviewContract, /analysisCoverage\.processedPasses/u);
-assert.match(reviewContract, /terminal receipt/u);
-assert.match(reviewContract, /attest/u);
-assert.match(reviewContract, /cross-workstream/u);
-assert.match(reviewContract, /one global quiz/u);
-assert.match(reviewContract, /human-review order/u);
-assert.match(reviewContract, /collapsed analysis details/u);
-assert.match(reviewContract, /fixed,[\s\S]*trusted dictionary/u);
-assert.match(diffSkill, /compact serialized[\s\S]*4 MiB[\s\S]*8 MiB/u);
-assert.match(reviewContract, /ReviewModelV1[\s\S]*4 MiB[\s\S]*8 MiB/u);
-assert.match(security, /Review Model[\s\S]*4 MiB[\s\S]*8 MiB/u);
-assert.equal(MAX_INSPECTION_OUTPUT_BYTES, 16 * 1024);
-for (const document of [diffSkill, reviewContract, contributing, security]) {
-  assert.match(document, /16 KiB/u);
+assert.equal(packageJson.bin.hope, "./harness/hope.mjs");
+assert.equal(codexPlugin.name, "hope");
+assert.equal(codexPlugin.version, currentVersion);
+assert.equal(claudePlugin.name, "hope");
+assert.equal(claudePlugin.version, currentVersion);
+if (process.env.GITHUB_REF_NAME !== undefined) {
+  assert.equal(process.env.GITHUB_REF_NAME, `v${currentVersion}`);
 }
-assert.doesNotMatch(contributing, /8 KiB stdout ceiling/u);
-assert.match(security, /deliberately does not\s+bind[\s\S]*`updated_at`/u);
-assert.doesNotMatch(
-  security,
-  /also binds the pull request's provider-supplied `updated_at` value/u,
+assert.equal(codexPlugin.skills, "./skills/");
+assert.equal(claudePlugin.skills, "./skills/");
+assert.ok(codexMarketplace.plugins.some(
+  (entry) => entry.name === "hope" && entry.source.path === "./plugins/hope",
+));
+const claudeMarketplaceEntry = claudeMarketplace.plugins.find(
+  (entry) => entry.name === "hope",
 );
-assert.match(readme, /cleanup time, fixed seven days after creation/u);
-assert.doesNotMatch(readme, /eligible for cleanup for at least seven days/u);
+assert.equal(claudeMarketplaceEntry.source, "./plugins/hope");
+assert.equal(claudeMarketplaceEntry.version, undefined);
+assert.match(skill, /^---\r?\nname: diff\r?\ndescription: /u);
+assert.match(skill, /runtime\/diff\/cli\.mjs/u);
+assert.match(skill, /\$\{CLAUDE_PLUGIN_ROOT\}\/runtime\/diff\/cli\.mjs/u);
+assert.match(architecture, /harness -> features <- host adapters/u);
+assert.match(architecture, /\.codex-plugin\/plugin\.json/u);
+assert.match(architecture, /\.claude-plugin\/plugin\.json/u);
+assert.match(diff, /^# Hope diff\r?\n/u);
+assert.match(diff, /currently being rebuilt/u);
+assert.match(release, /npm run build:plugin/u);
+assert.match(release, /working-directory: plugins\/hope/u);
+assert.match(release, /zip -r "\.\.\/\.\.\/hope-\$\{GITHUB_REF_NAME\}\.zip" \./u);
+assert.match(release, /unzip -p [^\n]* \.claude-plugin\/plugin\.json/u);
+assert.match(release, /unzip -p [^\n]* \.codex-plugin\/plugin\.json/u);
+assert.match(release, /--generate-notes/u);
+assert.match(readme, /src="plugins\/hope\/assets\/telescope\.svg"/u);
+assert.match(readme, /claude --plugin-dir \.\/plugins\/hope/u);
+assert.match(readmeKo, /src="plugins\/hope\/assets\/telescope\.svg"/u);
+assert.match(readmeKo, /claude --plugin-dir \.\/plugins\/hope/u);
 
-assert.equal(changeRequestSchema.properties.schemaVersion.const, 1);
-assert.equal(reviewModelSchema.properties.schemaVersion.const, 1);
-assert.match(changeRequestSchema.title, /ChangeRequestV1/u);
-assert.match(reviewModelSchema.title, /ReviewModelV1/u);
-assert.ok(changeRequestSchema.required.includes("analysisPlan"));
-assert.ok(reviewModelSchema.required.includes("analysisCoverage"));
-assert.ok(reviewModelSchema.required.includes("locale"));
-assert.deepEqual(reviewModelSchema.properties.locale.enum, ["en", "ko"]);
-assert.deepEqual(
-  reviewModelSchema.$defs.analysisCoverage.required,
-  ["inspectionProtocolVersion", "summary", "processedPasses"],
-);
-assert.ok(reviewModelSchema.$defs.processedPass.required.includes("pageCount"));
-assert.ok(reviewModelSchema.$defs.processedPass.required.includes("terminalReceipt"));
-assert.deepEqual(
-  reviewModelSchema.$defs.verification.properties.status.enum,
-  ["not-run", "unknown"],
-);
-assert.doesNotMatch(
-  JSON.stringify(reviewModelSchema.$defs.evidence.properties.source.enum),
-  /verification/u,
-);
-
-for (const document of [readme, readmeKo]) {
-  assert.match(document, /\$hope:diff/u);
-  assert.match(document, /GitHub/u);
-  assert.match(document, /hope-review\.html/u);
-  assert.match(document, /dkstm95\/hope/u);
-  assert.match(document, /merge-base/u);
-  assert.match(document, /analysisPlan/u);
-  assert.match(document, /4,000/u);
-  assert.match(document, /64\s+KiB/u);
-  assert.match(document, /250/u);
-  assert.match(document, /200/u);
-  assert.match(document, /20,000/u);
-  assert.match(document, /768\s+KiB/u);
-  assert.match(document, /128\s+KiB/u);
-  assert.match(document, /no (?:cache|network)|캐시/u);
-  assert.match(document, /eligibleAfter/u);
-  assert.match(document, new RegExp(`v${currentVersion.replaceAll(".", "\\.")}`, "u"));
-  assert.doesNotMatch(document, /\$hope:align|HEAD\s*->\s*(?:current )?working tree/u);
-}
-assert.doesNotMatch(readme, /fixed interface uses English/u);
-assert.doesNotMatch(readmeKo, /고정 UI는 영어/u);
-
-assert.match(changelog, /^## 0\.3\.2-alpha /mu);
-assert.match(changelog, /^## 0\.3\.1-alpha /mu);
-assert.match(changelog, /^## 0\.3\.0-alpha /mu);
-assert.match(changelog, /^## 0\.2\.0-alpha /mu);
-assert.match(changelog, /^## 0\.1\.0-alpha /mu);
-assert.match(changelog, /Released under the DiffScope name/u);
-assert.match(releaseWorkflow, /actions\/checkout@v6/u);
-assert.match(releaseWorkflow, /actions\/setup-node@v6/u);
-assert.doesNotMatch(releaseWorkflow, /actions\/(?:checkout|setup-node)@v7/u);
-
-console.log(`Hope ${packageJson.version} release metadata is consistent.`);
+console.log(`Hope ${currentVersion} package structure is consistent.`);

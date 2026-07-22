@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "hope",
+  "version": "0.4.0-alpha",
+  "description": "Adds Hope skills to Claude Code. Requires Node.js 20 or newer. Hope diff currently reports its rebuild status.",
+  "author": {
+    "name": "SeungIl",
+    "url": "https://github.com/dkstm95"
+  },
+  "homepage": "https://github.com/dkstm95/hope#readme",
+  "repository": "https://github.com/dkstm95/hope",
+  "license": "MIT",
+  "keywords": ["harness", "diff", "pull-request", "code-understanding"],
+  "skills": "./skills/"
+}

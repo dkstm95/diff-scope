@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.0-alpha - Unreleased
+
+- Make the repository root the Hope package so the independent harness,
+  shared features, product documents, and Codex skill ship together.
+- Add an independent `hope` harness entry and keep the Codex skill as a thin
+  adapter to the same diff boundary.
+- Let Claude Code load the same plugin package and `diff` skill through its own
+  manifest and marketplace catalog. Codex and Claude Code do not carry separate
+  skill or feature implementations.
+- Move the Hope diff product definition to `docs/diff.md` as the shared source
+  of truth for both entry paths.
+- Remove the retired Change Request, Review Model, renderer, HTML design,
+  DiffRun, and their tests instead of carrying them into the new diff.
+- Remove the current cleanup implementation because it only managed retired
+  diff runs and review files. Rebuild cleanup after the new artifact lifecycle
+  defines exact ownership.
+- Mark diff as rebuilding and fail clearly without creating a replacement
+  artifact through an improvised path.
+
 ## 0.3.2-alpha - 2026-07-19
 
 - Make the review scope explicit: Hope uses changed code hunks, the PR
