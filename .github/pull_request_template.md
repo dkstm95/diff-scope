@@ -1,23 +1,22 @@
-## Change Request
+## Goal
 
-- Goal:
-- Why this change is needed:
-- Non-goals:
+- User result:
+- Why it is needed:
+- Not included:
 
-## Behavior
+## Change
 
-- Before -> after:
-- Causal path:
+- Before:
+- After:
+- Important decision or tradeoff:
 
-## Understanding
+## Safety
 
-- Important decision and tradeoff:
-- Invariant or risk:
-- Unknown or question for the author:
-- Reviewer prediction/check:
-- Durable knowledge candidate and existing SSOT, or `none`:
+- Main risk or unknown:
+- Ownership or cleanup rule, if relevant:
 
 ## Validation
 
-- Commands that actually ran:
+- Commands that ran:
+- Checks not run:
 - [ ] `npm run check`

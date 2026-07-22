@@ -1,7 +1,7 @@
 interface:
   display_name: "Hope Diff"
-  short_description: "Understand a PR before review or merge"
+  short_description: "Check the current Hope diff rebuild status"
   icon_small: "./assets/telescope.svg"
   icon_large: "./assets/telescope.svg"
   brand_color: "#5B5BD6"
-  default_prompt: "Use $hope:diff with a GitHub pull request URL to explain what changed, show the behavior, risks, and key code, let me try important scenarios, and check my understanding."
+  default_prompt: "Use $hope:diff to check the current Hope diff rebuild status."
