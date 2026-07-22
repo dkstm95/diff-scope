@@ -8,12 +8,14 @@ import {
   normalizeLineEndings,
   pluginBundleEntries,
 } from "./build-plugin.mjs";
+import { main as runHarness } from "../harness/hope.mjs";
 
 const root = new URL("../", import.meta.url);
 const fromRoot = (path) => new URL(path, root);
 const read = async (path) => await readFile(fromRoot(path), "utf8");
 const readJson = async (path) => JSON.parse(await read(path));
-const currentVersion = "0.4.0-alpha";
+const packageJson = await readJson("package.json");
+const currentVersion = packageJson.version;
 
 const requiredFiles = [
   ".agents/plugins/marketplace.json",
@@ -67,7 +69,6 @@ for (const entry of pluginBundleEntries) {
 }
 
 const [
-  packageJson,
   codexPlugin,
   claudePlugin,
   codexMarketplace,
@@ -80,7 +81,6 @@ const [
   readmeKo,
 ] =
   await Promise.all([
-    readJson("package.json"),
     readJson("plugins/hope/.codex-plugin/plugin.json"),
     readJson("plugins/hope/.claude-plugin/plugin.json"),
     readJson(".agents/plugins/marketplace.json"),
@@ -99,6 +99,15 @@ assert.equal(codexPlugin.name, "hope");
 assert.equal(codexPlugin.version, currentVersion);
 assert.equal(claudePlugin.name, "hope");
 assert.equal(claudePlugin.version, currentVersion);
+let harnessVersion = "";
+await runHarness(["--version"], {
+  stdout: {
+    write(value) {
+      harnessVersion += value;
+    },
+  },
+});
+assert.equal(harnessVersion, `${currentVersion}\n`);
 if (process.env.GITHUB_REF_TYPE === "tag") {
   assert.equal(process.env.GITHUB_REF_NAME, `v${currentVersion}`);
 }

@@ -15,6 +15,7 @@ import { main, parseArguments } from "../harness/hope.mjs";
 import { normalizeLineEndings } from "../tools/build-plugin.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const packageJson = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 
 test("generated plugin text uses the same line endings on every system", () => {
   assert.equal(normalizeLineEndings("one\r\ntwo\rthree\n"), "one\ntwo\nthree\n");
@@ -30,6 +31,19 @@ test("the harness parses its independent diff entry", () => {
     () => parseDiffArguments(["--url", "https://github.com/example/repo/pull/1"]),
     /does not accept arguments while it is being rebuilt/u,
   );
+});
+
+test("the harness reports the package version", async () => {
+  let output = "";
+  await main(["--version"], {
+    stdout: {
+      write(value) {
+        output += value;
+      },
+    },
+  });
+
+  assert.equal(output, `${packageJson.version}\n`);
 });
 
 test("the retired diff cannot run through the shared feature boundary", () => {
@@ -115,11 +129,11 @@ test("release checks bind versions only for tag builds", () => {
     GITHUB_REF_TYPE: "branch",
   });
   const release = runCheck({
-    GITHUB_REF_NAME: "v0.4.0-alpha",
+    GITHUB_REF_NAME: `v${packageJson.version}`,
     GITHUB_REF_TYPE: "tag",
   });
   const wrongRelease = runCheck({
-    GITHUB_REF_NAME: "v0.3.2-alpha",
+    GITHUB_REF_NAME: "v0.0.0-wrong",
     GITHUB_REF_TYPE: "tag",
   });
 

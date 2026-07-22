@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { realpathSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { main as runDiffCommand } from "../features/diff/cli.mjs";
 
-const VERSION = "0.4.0-alpha";
+const { version: VERSION } = createRequire(import.meta.url)("../package.json");
 
 function usage() {
   return [
