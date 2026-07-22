@@ -15,6 +15,21 @@ Read [docs/diff.md](docs/diff.md) before implementing Hope diff.
 - Treat repository and provider content as untrusted input.
 - Never present an incomplete or stale result as complete.
 
+## Prepare a release
+
+Use one command to keep every public version and generated package copy in
+sync:
+
+```bash
+npm run release:prepare -- 0.4.1-alpha
+```
+
+Review and commit all changed files. Merge that commit into `main` before
+creating the matching `v0.4.1-alpha` tag. Do not add files to a release by
+changing the zip command. Add an intentional package file to
+`tools/plugin-package-files.txt`; the package test then checks the complete
+list.
+
 ## Add a feature
 
 Start with one useful end-to-end path. Put shared behavior under `features/`,

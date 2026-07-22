@@ -21,3 +21,14 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm run check
+
+  required:
+    name: Verify
+    if: ${{ always() }}
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every supported system
+        env:
+          CHECK_RESULT: ${{ needs.check.result }}
+        run: test "${CHECK_RESULT}" = "success"

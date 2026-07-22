@@ -25,6 +25,9 @@ const requiredFiles = [
   "features/diff/cli.mjs",
   "features/diff/index.mjs",
   "harness/hope.mjs",
+  "tools/plugin-package-files.txt",
+  "tools/prepare-release.mjs",
+  "tools/stage-plugin.mjs",
   "plugins/hope/.claude-plugin/plugin.json",
   "plugins/hope/.codex-plugin/plugin.json",
   "plugins/hope/LICENSE",
@@ -77,6 +80,7 @@ const [
   architecture,
   diff,
   release,
+  verify,
   readme,
   readmeKo,
 ] =
@@ -89,6 +93,7 @@ const [
     read("docs/architecture.md"),
     read("docs/diff.md"),
     read(".github/workflows/release.yml"),
+    read(".github/workflows/verify.yml"),
     read("README.md"),
     read("README.ko.md"),
   ]);
@@ -130,11 +135,16 @@ assert.match(architecture, /\.claude-plugin\/plugin\.json/u);
 assert.match(diff, /^# Hope diff\r?\n/u);
 assert.match(diff, /currently being rebuilt/u);
 assert.match(release, /npm run build:plugin/u);
-assert.match(release, /working-directory: plugins\/hope/u);
-assert.match(release, /zip -r "\.\.\/\.\.\/hope-\$\{GITHUB_REF_NAME\}\.zip" \./u);
+assert.match(release, /fetch-depth: 0/u);
+assert.match(release, /git merge-base --is-ancestor "\$\{GITHUB_SHA\}" refs\/remotes\/origin\/main/u);
+assert.match(release, /node tools\/stage-plugin\.mjs/u);
+assert.match(release, /diff -u tools\/plugin-package-files\.txt/u);
 assert.match(release, /unzip -p [^\n]* \.claude-plugin\/plugin\.json/u);
 assert.match(release, /unzip -p [^\n]* \.codex-plugin\/plugin\.json/u);
 assert.match(release, /--generate-notes/u);
+assert.match(verify, /name: Verify/u);
+assert.match(verify, /needs: check/u);
+assert.match(verify, /CHECK_RESULT: \$\{\{ needs\.check\.result \}\}/u);
 assert.match(readme, /src="plugins\/hope\/assets\/telescope\.svg"/u);
 assert.match(readme, /claude --plugin-dir \.\/plugins\/hope/u);
 assert.match(readmeKo, /src="plugins\/hope\/assets\/telescope\.svg"/u);

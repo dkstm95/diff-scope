@@ -1,0 +1,10 @@
+.claude-plugin/plugin.json
+.codex-plugin/plugin.json
+LICENSE
+assets/telescope.svg
+docs/diff.md
+runtime/diff/cli.mjs
+runtime/diff/index.mjs
+skills/diff/SKILL.md
+skills/diff/agents/openai.yaml
+skills/diff/assets/telescope.svg

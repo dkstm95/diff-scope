@@ -70,6 +70,10 @@ The editable sources remain in root `docs/` and `features/`. Run
 every generated file with its source so they cannot become a second
 implementation or source of truth.
 
+Commit the rebuilt package copies with every source change. A push that changes
+only the source fails verification instead of silently publishing an old
+plugin copy.
+
 ## Develop
 
 No dependency install is needed.
@@ -77,6 +81,18 @@ No dependency install is needed.
 ```bash
 npm run check
 ```
+
+Prepare a release with one command. Pass the version without a `v` prefix:
+
+```bash
+npm run release:prepare -- 0.4.1-alpha
+```
+
+This updates the package and both host manifests, rebuilds the plugin copies,
+and runs all checks. Review and commit the resulting files before creating the
+matching `v0.4.1-alpha` tag. The release packages only the files listed in
+`tools/plugin-package-files.txt`, and the tag commit must already belong to
+`main`.
 
 ## License
 
