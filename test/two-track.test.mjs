@@ -93,3 +93,32 @@ test("the harness and skill command stop at the same rebuild boundary", () => {
   assert.match(harness.stderr, new RegExp(DIFF_REBUILD_MESSAGE, "u"));
   assert.match(skillCommand.stderr, new RegExp(DIFF_REBUILD_MESSAGE, "u"));
 });
+
+test("release checks bind versions only for tag builds", () => {
+  const checkRelease = resolve(root, "tools/check-release.mjs");
+  const runCheck = (githubEnvironment) => spawnSync(
+    process.execPath,
+    [checkRelease],
+    {
+      encoding: "utf8",
+      env: { ...process.env, ...githubEnvironment },
+    },
+  );
+
+  const pullRequest = runCheck({
+    GITHUB_REF_NAME: "7/merge",
+    GITHUB_REF_TYPE: "branch",
+  });
+  const release = runCheck({
+    GITHUB_REF_NAME: "v0.4.0-alpha",
+    GITHUB_REF_TYPE: "tag",
+  });
+  const wrongRelease = runCheck({
+    GITHUB_REF_NAME: "v0.3.2-alpha",
+    GITHUB_REF_TYPE: "tag",
+  });
+
+  assert.equal(pullRequest.status, 0, pullRequest.stderr);
+  assert.equal(release.status, 0, release.stderr);
+  assert.notEqual(wrongRelease.status, 0);
+});

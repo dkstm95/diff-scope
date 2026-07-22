@@ -98,7 +98,7 @@ assert.equal(codexPlugin.name, "hope");
 assert.equal(codexPlugin.version, currentVersion);
 assert.equal(claudePlugin.name, "hope");
 assert.equal(claudePlugin.version, currentVersion);
-if (process.env.GITHUB_REF_NAME !== undefined) {
+if (process.env.GITHUB_REF_TYPE === "tag") {
   assert.equal(process.env.GITHUB_REF_NAME, `v${currentVersion}`);
 }
 assert.equal(codexPlugin.skills, "./skills/");
