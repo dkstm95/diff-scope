@@ -5,6 +5,7 @@ import { access, readFile } from "node:fs/promises";
 
 import {
   expectedPluginFile,
+  normalizeLineEndings,
   pluginBundleEntries,
 } from "./build-plugin.mjs";
 
@@ -59,7 +60,7 @@ await Promise.all(retiredPaths.map(async (path) => {
 
 for (const entry of pluginBundleEntries) {
   assert.equal(
-    await read(entry.destination),
+    normalizeLineEndings(await read(entry.destination)),
     await expectedPluginFile(entry),
     `${entry.destination} must be rebuilt from ${entry.source}`,
   );

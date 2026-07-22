@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 const root = new URL("../", import.meta.url);
 const fromRoot = (path) => new URL(path, root);
 
+export const normalizeLineEndings = (content) => content.replace(/\r\n?/gu, "\n");
+
 export const pluginBundleEntries = Object.freeze([
   {
     banner: "",
@@ -36,7 +38,7 @@ export const pluginBundleEntries = Object.freeze([
 ]);
 
 export async function expectedPluginFile(entry) {
-  const source = await readFile(fromRoot(entry.source), "utf8");
+  const source = normalizeLineEndings(await readFile(fromRoot(entry.source), "utf8"));
   if (source.startsWith("#!")) {
     const firstLineEnd = source.indexOf("\n") + 1;
     return `${source.slice(0, firstLineEnd)}${entry.banner}${source.slice(firstLineEnd)}`;

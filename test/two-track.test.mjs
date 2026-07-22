@@ -12,8 +12,13 @@ import {
 } from "../features/diff/index.mjs";
 import { parseDiffArguments } from "../features/diff/cli.mjs";
 import { main, parseArguments } from "../harness/hope.mjs";
+import { normalizeLineEndings } from "../tools/build-plugin.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+test("generated plugin text uses the same line endings on every system", () => {
+  assert.equal(normalizeLineEndings("one\r\ntwo\rthree\n"), "one\ntwo\nthree\n");
+});
 
 test("the harness parses its independent diff entry", () => {
   assert.deepEqual(parseArguments(["diff"]), {
