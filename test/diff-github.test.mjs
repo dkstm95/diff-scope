@@ -13,11 +13,20 @@ function response(value) {
 function fakeGitHub({
   body = "Keep the real error.",
   commitMessage = "Keep the error\n\nBody",
+  contentSize,
   incompletePatch = false,
   missingFiles = false,
+  providerFile,
   secretFile = false,
   title = "Keep the error",
 } = {}) {
+  const changedFile = providerFile ?? {
+    additions: 1,
+    deletions: 1,
+    filename: secretFile ? ".env" : "src/error.js",
+    patch: incompletePatch ? undefined : "@@ -1 +1 @@\n-old\n+new",
+    status: "modified",
+  };
   return async (command, arguments_) => {
     assert.equal(command, "gh");
     assert.deepEqual(arguments_.slice(0, 3), ["api", "--hostname", "github.com"]);
@@ -47,13 +56,7 @@ function fakeGitHub({
       return response({ merge_base_commit: { sha: "c".repeat(40) } });
     }
     if (path.includes("/pulls/1/files?")) {
-      return response(missingFiles ? [] : [{
-        additions: 1,
-        deletions: 1,
-        filename: secretFile ? ".env" : "src/error.js",
-        patch: incompletePatch ? undefined : "@@ -1 +1 @@\n-old\n+new",
-        status: "modified",
-      }]);
+      return response(missingFiles ? [] : [changedFile]);
     }
     if (path.includes("/pulls/1/commits?")) {
       return response([{
@@ -61,12 +64,12 @@ function fakeGitHub({
         sha: "b".repeat(40),
       }]);
     }
-    if (path.includes("/contents/src/error.js?ref=")) {
+    if (path.includes("/contents/")) {
       const text = path.endsWith(`ref=${"a".repeat(40)}`) ? "old" : "new";
       return response({
         content: Buffer.from(text).toString("base64"),
         encoding: "base64",
-        size: Buffer.byteLength(text),
+        size: contentSize ?? Buffer.byteLength(text),
         type: "file",
       });
     }
@@ -206,6 +209,63 @@ test("an incomplete patch falls back to exact before and after files", async () 
   );
   assert.equal(seen.filter((path) => path.includes("/contents/")).length, 2);
   assert.equal(snapshot.files[0].sourceIds.length, 2);
+});
+
+test("a provider file without text changes stays metadata-only without a body request", async () => {
+  const seen = [];
+  const github = fakeGitHub({
+    providerFile: {
+      additions: 0,
+      deletions: 0,
+      filename: "design/fonts/HopeCode.woff2",
+      status: "added",
+    },
+  });
+  const snapshot = await collectGitHubPullRequest(
+    "https://github.com/example/repo/pull/1",
+    {
+      gh: async (command, arguments_) => {
+        seen.push(arguments_.at(-1));
+        return await github(command, arguments_);
+      },
+      locale: "en-US",
+      theme: "system",
+    },
+  );
+
+  assert.equal(seen.some((path) => path.includes("/contents/")), false);
+  assert.equal(snapshot.files[0].bodyState, "metadata-only");
+  assert.equal(snapshot.files[0].bodyReasonKind, "no-text-diff");
+  assert.equal(snapshot.limits.at(-1).reasonKind, "no-text-diff");
+});
+
+test("an oversized safe-text body becomes a visible metadata-only limit", async () => {
+  const seen = [];
+  const github = fakeGitHub({
+    contentSize: 300_000,
+    providerFile: {
+      additions: 4_000,
+      deletions: 0,
+      filename: "dist/generated-bundle.js",
+      status: "added",
+    },
+  });
+  const snapshot = await collectGitHubPullRequest(
+    "https://github.com/example/repo/pull/1",
+    {
+      gh: async (command, arguments_) => {
+        seen.push(arguments_.at(-1));
+        return await github(command, arguments_);
+      },
+      locale: "en-US",
+      theme: "system",
+    },
+  );
+
+  assert.equal(seen.filter((path) => path.includes("/contents/")).length, 1);
+  assert.equal(snapshot.files[0].bodyState, "metadata-only");
+  assert.equal(snapshot.files[0].bodyReasonKind, "safe-size-limit");
+  assert.equal(snapshot.limits.at(-1).reasonKind, "safe-size-limit");
 });
 
 test("a private path is redacted before Hope fetches its body", async () => {

@@ -346,6 +346,13 @@ explained, supporting, or mechanical. No file may disappear silently.
 Detected truncation, incomplete pagination, or a partial body counts as
 unavailable content. It cannot count as a fully inspected file.
 
+When GitHub does not provide a text diff for a zero-line change, record the
+file as metadata-only without requesting its body. When a body is larger than
+Hope's safe text limit, record that deliberate safety boundary as
+metadata-only instead of treating the file as inspected or aborting an
+otherwise grounded review. Both omissions remain visible and the analysis must
+state whether they limit a main explanation or judgment.
+
 A limited review can be created only when:
 
 - the complete changed-file list is known;

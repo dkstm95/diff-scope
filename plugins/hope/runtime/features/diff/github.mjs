@@ -53,7 +53,9 @@ function unavailableReason(kind, detail) {
   return {
     "credential-pattern": "The file body matched a high-confidence credential pattern",
     "invalid-text": "The body is not UTF-8 text",
+    "no-text-diff": "GitHub did not report a text diff for this changed file",
     "private-path": "The file name commonly contains private configuration",
+    "safe-size-limit": `The file exceeds Hope's ${LIMITS.safeBodyBytes}-byte safe-text limit`,
     "special-entry": `GitHub reported a ${String(detail ?? "special")} entry`,
   }[kind];
 }
@@ -166,7 +168,11 @@ async function readContent(owner, repository, path, revision, options) {
     throw new Error(`GitHub returned an invalid size for ${path}`);
   }
   if (item.size > LIMITS.safeBodyBytes) {
-    throw new Error(`${path} exceeds Hope's ${LIMITS.safeBodyBytes}-byte safe-text limit`);
+    return {
+      reason: unavailableReason("safe-size-limit"),
+      reasonKind: "safe-size-limit",
+      state: "oversized",
+    };
   }
   if (item.encoding !== "base64" || typeof item.content !== "string") {
     throw new Error(`GitHub did not return a complete body for ${path}`);
@@ -248,12 +254,37 @@ async function collectFileBodies(target, pull, providerFiles, options) {
       });
       continue;
     }
+    if (
+      completePatch === undefined
+      && file.additions === 0
+      && file.deletions === 0
+    ) {
+      values.push({
+        additions: file.additions,
+        bodyReason: unavailableReason("no-text-diff"),
+        bodyReasonKind: "no-text-diff",
+        bodyState: "metadata-only",
+        deletions: file.deletions,
+        filename: file.filename,
+        previousFilename: file.previous_filename,
+        providerStatus: file.status,
+      });
+      continue;
+    }
     if (completePatch !== undefined) {
       const patchBytes = byteLength(completePatch);
       if (patchBytes > LIMITS.safeBodyBytes) {
-        throw new Error(
-          `${file.filename} exceeds Hope's ${LIMITS.safeBodyBytes}-byte safe-text limit`,
-        );
+        values.push({
+          additions: file.additions,
+          bodyReason: unavailableReason("safe-size-limit"),
+          bodyReasonKind: "safe-size-limit",
+          bodyState: "metadata-only",
+          deletions: file.deletions,
+          filename: file.filename,
+          previousFilename: file.previous_filename,
+          providerStatus: file.status,
+        });
+        continue;
       }
       total += patchBytes;
       if (total > LIMITS.safeBodyTotalBytes) {
@@ -307,20 +338,22 @@ async function collectFileBodies(target, pull, providerFiles, options) {
 
     const redaction = redactionKind(file.filename, texts)
       ?? redactionKind(file.previous_filename ?? file.filename, texts);
-    const special = [before, after].find((item) => (
-      item.state === "binary" || item.state === "special"
+    const unavailable = [before, after].find((item) => (
+      item.state === "binary"
+      || item.state === "oversized"
+      || item.state === "special"
     ));
     const bodyState = redaction
       ? "redacted"
-      : special
+      : unavailable
         ? "metadata-only"
         : "included";
     values.push({
       additions: file.additions,
       after: bodyState === "included" ? after.text : undefined,
       before: bodyState === "included" ? before.text : undefined,
-      bodyReason: redaction ? unavailableReason(redaction) : special?.reason,
-      bodyReasonKind: redaction ?? special?.reasonKind,
+      bodyReason: redaction ? unavailableReason(redaction) : unavailable?.reason,
+      bodyReasonKind: redaction ?? unavailable?.reasonKind,
       bodyState,
       deletions: file.deletions,
       filename: file.filename,
