@@ -718,6 +718,7 @@ button { color: inherit; }
 }
 .topbar-inner {
   display: flex;
+  position: relative;
   max-width: ${LAYOUT.documentWidth}px;
   margin: auto;
   min-height: 52px;
@@ -744,6 +745,12 @@ button { color: inherit; }
 }
 .top-context a:hover,
 .top-context a:focus-visible { color: var(--text); }
+.topbar-actions {
+  display: flex;
+  margin-left: auto;
+  align-items: center;
+  gap: ${space2}px;
+}
 .pr-hero {
   margin-bottom: ${space4}px;
 }
@@ -803,6 +810,11 @@ button { color: inherit; }
   stroke: currentColor;
 }
 .theme-icon[hidden] { display: none; }
+.toc-icon {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+}
 
 .layout {
   display: grid;
@@ -1261,8 +1273,7 @@ td:first-child {
 .artifact-details { margin-top: ${space3}px; }
 .evidence > summary,
 .artifact-details > summary,
-.quiz > details > summary,
-.toc-mobile > summary {
+.quiz > details > summary {
   display: flex;
   min-height: 44px;
   gap: ${space1}px;
@@ -1274,14 +1285,12 @@ td:first-child {
 .evidence > summary { min-height: 32px; }
 .evidence > summary::-webkit-details-marker,
 .artifact-details > summary::-webkit-details-marker,
-.quiz > details > summary::-webkit-details-marker,
-.toc-mobile > summary::-webkit-details-marker {
+.quiz > details > summary::-webkit-details-marker {
   display: none;
 }
 .evidence > summary::before,
 .artifact-details > summary::before,
-.quiz > details > summary::before,
-.toc-mobile > summary::before {
+.quiz > details > summary::before {
   content: "›";
   display: inline-block;
   flex: 0 0 auto;
@@ -1289,8 +1298,7 @@ td:first-child {
 }
 .evidence[open] > summary::before,
 .artifact-details[open] > summary::before,
-.quiz > details[open] > summary::before,
-.toc-mobile[open] > summary::before {
+.quiz > details[open] > summary::before {
   transform: rotate(90deg);
 }
 .artifact-details dl {
@@ -1320,33 +1328,42 @@ td:first-child {
   .toc-desktop { display: none; }
   .toc-mobile {
     display: block;
-    width: max-content;
-    max-width: 100%;
-    margin: 0 0 ${space4}px auto;
+    position: relative;
   }
   .toc-mobile > summary {
-    display: flex;
+    display: inline-flex;
     min-height: 44px;
     padding: ${space2}px ${space3}px;
     align-items: center;
+    gap: ${space2}px;
     border: 1px solid var(--component-border);
     background: var(--panel);
     cursor: pointer;
+    font-weight: 500;
+    list-style: none;
   }
-  .toc-mobile[open] {
-    width: 100%;
+  .toc-mobile > summary::-webkit-details-marker { display: none; }
+  .toc-mobile-panel {
+    position: absolute;
+    z-index: 10;
+    top: calc(100% + ${space2}px);
+    right: 0;
+    width: min(420px, calc(100vw - ${space5}px));
     padding: ${space3}px;
     border: 1px solid var(--component-border);
     background: var(--panel);
   }
-  .toc-mobile[open] > summary {
-    min-height: 44px;
-    padding: 0 0 ${space2}px;
-    border: 0;
-    border-bottom: 1px solid var(--border);
-    background: transparent;
+  .toc-mobile-panel .toc-synopsis {
+    margin: 0 0 ${space2}px;
   }
-  .toc-mobile ol { padding-left: ${space5}px; }
+  .toc-mobile-panel ol {
+    display: grid;
+    margin: 0;
+    padding: ${space3}px 0 0 ${space5}px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: ${space2}px ${space4}px;
+    border-top: 1px solid var(--border);
+  }
   .toc-mobile a {
     color: var(--muted);
     font-weight: 500;
@@ -1424,7 +1441,9 @@ td:first-child {
   .theme-button {
     width: 44px;
     height: 44px;
-    margin-left: auto;
+  }
+  .toc-mobile-panel ol {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1496,7 +1515,7 @@ function clientScript(dictionary) {
     dark: label(dictionary, "common.useDarkTheme"),
     light: label(dictionary, "common.useLightTheme"),
   });
-  return `(()=>{"use strict";const labels=${labels};const root=document.documentElement;const theme=document.getElementById("theme-toggle");const currentTheme=()=>root.dataset.theme==="dark"||(!root.dataset.theme&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";const syncTheme=()=>{if(!theme)return;const next=currentTheme()==="dark"?"light":"dark";theme.setAttribute("aria-label",labels[next]);theme.setAttribute("title",labels[next]);for(const icon of theme.querySelectorAll("[data-theme-icon]"))icon.toggleAttribute("hidden",icon.dataset.themeIcon!==next);};syncTheme();theme?.addEventListener("click",()=>{root.dataset.theme=currentTheme()==="dark"?"light":"dark";syncTheme();});matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",syncTheme);const openTarget=()=>{if(!location.hash)return;const target=document.getElementById(location.hash.slice(1));if(!target)return;for(let parent=target.parentElement;parent;parent=parent.parentElement)if(parent.tagName==="DETAILS")parent.open=true;};addEventListener("hashchange",openTarget);openTarget();})();`;
+  return `(()=>{"use strict";const labels=${labels};const root=document.documentElement;const theme=document.getElementById("theme-toggle");const toc=document.querySelector(".toc-mobile");const currentTheme=()=>root.dataset.theme==="dark"||(!root.dataset.theme&&matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";const syncTheme=()=>{if(!theme)return;const next=currentTheme()==="dark"?"light":"dark";theme.setAttribute("aria-label",labels[next]);theme.setAttribute("title",labels[next]);for(const icon of theme.querySelectorAll("[data-theme-icon]"))icon.toggleAttribute("hidden",icon.dataset.themeIcon!==next);};syncTheme();theme?.addEventListener("click",()=>{root.dataset.theme=currentTheme()==="dark"?"light":"dark";syncTheme();});toc?.addEventListener("click",event=>{if(event.target.closest("a"))toc.open=false;});matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",syncTheme);const openTarget=()=>{if(!location.hash)return;const target=document.getElementById(location.hash.slice(1));if(!target)return;for(let parent=target.parentElement;parent;parent=parent.parentElement)if(parent.tagName==="DETAILS")parent.open=true;};addEventListener("hashchange",openTarget);openTarget();})();`;
 }
 
 export async function renderReview(review, { fonts } = {}) {
@@ -1539,15 +1558,28 @@ export async function renderReview(review, { fonts } = {}) {
     <div class="topbar-inner">
       <div class="brand">HOPE · DIFF</div>
       <div class="top-context"><a href="${html(prUrl)}" rel="noreferrer noopener" target="_blank">${html(owner)}/${html(name)} · PR #${review.snapshot.pullRequest.number}</a></div>
-      <button class="theme-button" id="theme-toggle" type="button" aria-label="${html(label(dictionary, theme === "dark" ? "common.useLightTheme" : "common.useDarkTheme"))}" title="${html(label(dictionary, theme === "dark" ? "common.useLightTheme" : "common.useDarkTheme"))}">
-        <svg class="theme-icon" data-theme-icon="dark" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"${theme === "dark" ? " hidden" : ""}>
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79"></path>
-        </svg>
-        <svg class="theme-icon" data-theme-icon="light" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"${theme === "dark" ? "" : " hidden"}>
-          <circle cx="12" cy="12" r="4"></circle>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
-        </svg>
-      </button>
+      <div class="topbar-actions">
+        <button class="theme-button" id="theme-toggle" type="button" aria-label="${html(label(dictionary, theme === "dark" ? "common.useLightTheme" : "common.useDarkTheme"))}" title="${html(label(dictionary, theme === "dark" ? "common.useLightTheme" : "common.useDarkTheme"))}">
+          <svg class="theme-icon" data-theme-icon="dark" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"${theme === "dark" ? " hidden" : ""}>
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79"></path>
+          </svg>
+          <svg class="theme-icon" data-theme-icon="light" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"${theme === "dark" ? "" : " hidden"}>
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
+          </svg>
+        </button>
+        <details class="toc-mobile">
+          <summary>
+            <svg class="toc-icon" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path>
+            </svg>
+            ${html(label(dictionary, "common.menu"))}
+          </summary>
+          <nav class="toc-mobile-panel" aria-label="${html(label(dictionary, "common.menu"))}">
+            ${toc}
+          </nav>
+        </details>
+      </div>
     </div>
   </header>
   <div class="layout">
@@ -1558,10 +1590,6 @@ export async function renderReview(review, { fonts } = {}) {
         <div class="pr-snapshot">${html(label(dictionary, "artifact.snapshot"))} ${html(review.snapshot.snapshot.head.slice(0, 8))} · <time datetime="${html(review.snapshot.capturedAt)}" title="${html(review.snapshot.capturedAt)}">${html(formatTimestamp(review.snapshot.capturedAt))}</time></div>
         <div class="pr-freshness">${html(label(dictionary, "artifact.notice"))}</div>
       </div>
-      <details class="toc-mobile">
-        <summary>${html(label(dictionary, "common.menu"))}</summary>
-        ${toc}
-      </details>
       ${synopsisHtml}
       ${sections.map((item) => item.html).join("")}
     </main>

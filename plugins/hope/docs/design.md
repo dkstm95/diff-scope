@@ -47,7 +47,9 @@ On a narrow screen:
 
 - keep the same information order and status language;
 - use one column;
-- use a compact native collapsible table of contents;
+- put a compact native collapsible table of contents in the product bar;
+- do not give the closed table of contents its own body row or vertical gap;
+- open its links in a bounded panel directly below the product bar;
 - use larger body text and touch targets.
 
 A complex drawer is allowed only after its focus, keyboard, scroll, and deep

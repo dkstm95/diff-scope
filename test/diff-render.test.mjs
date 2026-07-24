@@ -61,6 +61,15 @@ test("rendering is byte-identical and keeps untrusted content inert", async () =
   assert.match(html, /<div class="pr-hero">[\s\S]*?<h1>/u);
   assert.match(html, /rel="noreferrer noopener" target="_blank"/u);
   assert.doesNotMatch(header, /<h1>/u);
+  assert.match(header, /<details class="toc-mobile">/u);
+  assert.match(header, /class="toc-mobile-panel"/u);
+  assert.match(header, /class="toc-icon"/u);
+  assert.doesNotMatch(
+    html.match(/<main class="main"[\s\S]*?<\/main>/u)?.[0] ?? "",
+    /<details class="toc-mobile">/u,
+  );
+  assert.match(html, /\.toc-mobile-panel \{[\s\S]*?position: absolute;/u);
+  assert.match(html, /if\(event\.target\.closest\("a"\)\)toc\.open=false/u);
   assert.match(html, /<section class="synopsis" id="synopsis"/u);
   assert.match(html, /class="toc-synopsis"><a href="#synopsis"/u);
   assert.match(html, /\.section-heading h2::before/u);

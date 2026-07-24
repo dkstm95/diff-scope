@@ -146,11 +146,22 @@ test("mobile evidence controls are distinct and large enough to touch", async ({
 
   const mobileToc = page.locator(".toc-mobile");
   const mobileTocSummary = mobileToc.locator(":scope > summary");
+  await expect(mobileToc.locator("xpath=ancestor::header[1]")).toHaveCount(1);
+  const hero = await page.locator(".pr-hero").boundingBox();
+  const synopsis = await page.locator("#synopsis").boundingBox();
+  expect(hero).not.toBeNull();
+  expect(synopsis).not.toBeNull();
+  expect(synopsis.y - (hero.y + hero.height)).toBeLessThanOrEqual(24);
+  const synopsisTopBeforeOpen = synopsis.y;
   await mobileTocSummary.click();
   await expect(mobileToc).toHaveAttribute("open", "");
   const openTocBox = await mobileTocSummary.boundingBox();
   expect(openTocBox).not.toBeNull();
   expect(openTocBox.height).toBeGreaterThanOrEqual(44);
+  const synopsisAfterOpen = await page.locator("#synopsis").boundingBox();
+  expect(synopsisAfterOpen).not.toBeNull();
+  expect(synopsisAfterOpen.y).toBe(synopsisTopBeforeOpen);
+  await expectNoPageOverflow(page);
 });
 
 test("highlighted code preserves source line breaks in the DOM", async ({ page }) => {
