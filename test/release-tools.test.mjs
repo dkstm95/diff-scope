@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { makeAnalysis, makeSnapshot } from "../test-support/diff-fixture.mjs";
 import {
   isSemanticVersion,
   replaceVersion,
@@ -61,6 +63,26 @@ test("the package file list rejects ambiguous or unsafe paths", () => {
   assert.throws(() => parsePackageFileList("folder/./file\n"), /unsafe/iu);
 });
 
+test("CI installs locked dependencies before running checks or builds", async () => {
+  const verify = await readFile(join(root, ".github/workflows/verify.yml"), "utf8");
+  const release = await readFile(join(root, ".github/workflows/release.yml"), "utf8");
+
+  const verifyInstall = verify.indexOf("- run: npm ci");
+  const releaseInstall = release.indexOf("- run: npm ci");
+  assert.ok(verifyInstall >= 0, "verify workflow must install dependencies");
+  assert.ok(releaseInstall >= 0, "release workflow must install dependencies");
+  assert.ok(verifyInstall < verify.indexOf("- run: npm run check"));
+  assert.ok(releaseInstall < release.indexOf("- run: npm run check"));
+  assert.ok(releaseInstall < release.indexOf("npm run build:plugin"));
+  assert.match(verify, /needs: \[check, browser\]/u);
+  assert.match(verify, /BROWSER_RESULT: \$\{\{ needs\.browser\.result \}\}/u);
+  assert.match(release, /npx playwright install --with-deps chromium/u);
+  assert.match(release, /npm run test:browser/u);
+  assert.ok(
+    release.indexOf("npm run test:browser") < release.indexOf("npm run build:plugin"),
+  );
+});
+
 test("the release package contains exactly the approved plugin files", async (context) => {
   const temporaryRoot = await mkdtemp(join(tmpdir(), "hope-package-test-"));
   const destination = join(temporaryRoot, "hope");
@@ -78,6 +100,52 @@ test("the release package contains exactly the approved plugin files", async (co
       entry,
     );
   }
+
+  const outsideRepository = join(temporaryRoot, "outside");
+  const configHome = join(temporaryRoot, "config");
+  await mkdir(outsideRepository);
+  const environment = { ...process.env, HOPE_CONFIG_HOME: configHome };
+  const diffHelp = spawnSync(
+    process.execPath,
+    [join(destination, "runtime/features/diff/cli.mjs"), "--help"],
+    {
+      cwd: outsideRepository,
+      encoding: "utf8",
+      env: environment,
+    },
+  );
+  const settingsShow = spawnSync(
+    process.execPath,
+    [join(destination, "runtime/settings/cli.mjs"), "show"],
+    {
+      cwd: outsideRepository,
+      encoding: "utf8",
+      env: environment,
+    },
+  );
+  assert.equal(diffHelp.status, 0, diffHelp.stderr);
+  assert.match(diffHelp.stdout, /Use the Hope diff feature/u);
+  assert.equal(settingsShow.status, 0, settingsShow.stderr);
+  assert.match(settingsShow.stdout, /Hope settings|Hope 설정/u);
+
+  const stagedValidate = await import(pathToFileURL(
+    join(destination, "runtime/features/diff/validate.mjs"),
+  ));
+  const stagedRender = await import(pathToFileURL(
+    join(destination, "runtime/features/diff/render.mjs"),
+  ));
+  const runId = "5".repeat(32);
+  const snapshot = makeSnapshot();
+  const review = stagedValidate.validateAnalysis(
+    makeAnalysis(snapshot, runId),
+    snapshot,
+    { runId },
+  );
+  const artifact = await stagedRender.renderReview(review);
+  assert.match(
+    artifact.bytes.toString("utf8"),
+    /class="syntax-token-[a-f0-9]{16}"/u,
+  );
 
   await assert.rejects(stagePlugin(destination), /already exists/u);
   await assert.rejects(

@@ -16,7 +16,17 @@
     "hope": "node harness/hope.mjs",
     "release:prepare": "node tools/prepare-release.mjs",
     "test": "node --test",
+    "test:browser": "playwright test",
     "check:release": "node tools/check-release.mjs",
     "check": "npm run check:release && npm test"
+  },
+  "dependencies": {
+    "@shikijs/langs": "4.3.1",
+    "@shikijs/themes": "4.3.1",
+    "shiki": "4.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "esbuild": "0.28.1"
   }
 }

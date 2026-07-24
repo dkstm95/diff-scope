@@ -44,6 +44,7 @@ identity checks, and failure behavior before implementing cleanup.
 Use Node.js 20 or newer.
 
 ```bash
+npm install
 npm run check
 ```
 

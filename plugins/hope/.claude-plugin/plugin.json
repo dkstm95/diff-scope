@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "hope",
   "version": "0.4.0-alpha",
-  "description": "Adds Hope skills to Claude Code. Requires Node.js 20 or newer. Hope diff currently reports its rebuild status.",
+  "description": "Adds evidence-linked GitHub pull-request reviews and shared Hope settings to Claude Code. Requires Node.js 20 or newer.",
   "author": {
     "name": "SeungIl",
     "url": "https://github.com/dkstm95"

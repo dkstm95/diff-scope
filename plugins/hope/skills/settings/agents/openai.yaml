@@ -1,0 +1,7 @@
+interface:
+  display_name: "Hope Settings"
+  short_description: "Set Hope language and theme preferences"
+  icon_small: "./assets/telescope.svg"
+  icon_large: "./assets/telescope.svg"
+  brand_color: "#087EA4"
+  default_prompt: "Use $hope:settings to show or update my Hope preferences."

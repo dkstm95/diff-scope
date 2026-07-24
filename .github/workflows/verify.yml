@@ -20,15 +20,30 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
+      - run: npm ci
       - run: npm run check
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
 
   required:
     name: Verify
     if: ${{ always() }}
-    needs: check
+    needs: [check, browser]
     runs-on: ubuntu-latest
     steps:
-      - name: Check every supported system
+      - name: Check every supported system and browser
         env:
+          BROWSER_RESULT: ${{ needs.browser.result }}
           CHECK_RESULT: ${{ needs.check.result }}
-        run: test "${CHECK_RESULT}" = "success"
+        run: |
+          test "${CHECK_RESULT}" = "success"
+          test "${BROWSER_RESULT}" = "success"
