@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { main as runDiffCommand } from "../features/diff/cli.mjs";
+import { main as runSettingsCommand } from "../settings/cli.mjs";
 
 const { version: VERSION } = createRequire(import.meta.url)("../package.json");
 
@@ -16,8 +17,9 @@ function usage() {
     "  hope --help",
     "  hope --version",
     "  hope diff",
+    "  hope settings <show|set|reset>",
     "",
-    "Hope diff is being rebuilt from docs/diff.md.",
+    "Automatic diff analysis currently runs through the Hope Claude or Codex skill.",
   ].join("\n");
 }
 
@@ -29,7 +31,9 @@ export function parseArguments(argv) {
     return { command: "version" };
   }
   const [command, ...rest] = argv;
-  if (command !== "diff") throw new TypeError(`Unknown Hope command: ${command}`);
+  if (!["diff", "settings"].includes(command)) {
+    throw new TypeError(`Unknown Hope command: ${command}`);
+  }
   return { arguments: rest, command };
 }
 
@@ -44,7 +48,16 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
     stdout.write(`${VERSION}\n`);
     return;
   }
-  return await (dependencies.runDiffCommand ?? runDiffCommand)(options.arguments);
+  if (options.command === "settings") {
+    return await (dependencies.runSettingsCommand ?? runSettingsCommand)(
+      options.arguments,
+      { ...dependencies, stdout },
+    );
+  }
+  return await (dependencies.runDiffCommand ?? runDiffCommand)(
+    options.arguments.length === 0 ? ["automatic"] : options.arguments,
+    { ...dependencies, stdout },
+  );
 }
 
 const isEntrypoint = (() => {
@@ -59,6 +72,6 @@ const isEntrypoint = (() => {
 if (isEntrypoint) {
   main().catch((error) => {
     process.stderr.write(`hope: ${error.message}\n`);
-    process.exitCode = error.code === "HOPE_DIFF_REBUILDING" ? 2 : 1;
+    process.exitCode = error.code === "HOPE_DIFF_MODEL_ADAPTER_REQUIRED" ? 2 : 1;
   });
 }

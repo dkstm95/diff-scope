@@ -13,24 +13,30 @@ Hope는 서로 분리된 두 진입 경로를 중심으로 구성한다.
 - 독립 Hope 하네스를 사용한다.
 - Codex 또는 Claude Code에서 Hope 플러그인과 스킬을 사용한다.
 
-두 경로는 같은 기능 코드를 호출한다. 어느 쪽도 별도 구현을 갖지 않는다. 구조는
-마련했지만 새 구현을 만드는 동안 diff는 사용할 수 없다.
+두 경로는 같은 기능 코드를 호출한다. 어느 쪽도 별도 구현을 갖지 않는다.
+Claude와 Codex 스킬이 첫 번째 완성된 diff 경로를 제공한다. 독립 하네스는 설정,
+수집, 검증, 렌더링, 수명 주기 코드를 함께 쓰며 자체 AI 어댑터는 아직 제공하지
+않는다고 분명히 알린다.
 프로젝트 방향은 [PRINCIPLES.md](PRINCIPLES.md), 현재 구조는
 [docs/architecture.md](docs/architecture.md)에 정리되어 있다.
 
 ## 현재 상태
 
-Hope diff는 [docs/diff.md](docs/diff.md)를 기준으로 다시 만들고 있다. 이전
-collector, review model, renderer, HTML 디자인과 그 파일을 지우던 cleanup은
-제거했다. 현재 소스 버전은 review 결과물을 만들지 않는다.
+Hope diff는 하나의 정확한 GitHub PR을 설명하는 비공개 단일 HTML 파일을
+만든다. URL을 생략하면 현재 저장소에서 사용자가 만든 열린 PR을 고르고,
+GitHub PR URL을 직접 받을 수도 있다.
 
-두 진입 경로는 하나의 공용 diff 경계에 연결되어 있으며 같은 재구축 안내와
-함께 멈춘다. 이것은 개발 중인 임시 상태이며 완성된 diff 릴리스가 아니다.
+Claude와 Codex 스킬은 활성 AI 세션을 구조화된 분석 작성에만 사용한다.
+공용 Hope 코드는 PR 수집, 모든 파일과 근거 검증, 스냅샷 재확인, 오프라인
+HTML 렌더링, 비공개 실행 데이터 정리를 담당한다.
+
+전역 Hope 설정은 두 경로에서 함께 쓸 `ko-KR` 또는 `en-US`와 `system`,
+`light`, `dark` 테마를 정한다.
 
 ## 필요한 환경
 
-현재 Hope는 Node.js 20 이상이 필요하다. 플러그인 경로를 사용할 때는 Codex나
-Claude Code도 필요하다.
+Hope는 Node.js 20 이상과 인증된 GitHub CLI가 필요하다. 플러그인에서 자동 AI
+분석을 사용할 때는 Codex나 Claude Code도 필요하다.
 
 ## 하네스
 
@@ -39,9 +45,11 @@ Codex나 Claude 없이 하네스를 실행할 수 있다.
 ```bash
 npm run hope -- --help
 npm run hope -- diff
+npm run hope -- settings show
 ```
 
-명령은 `harness/`에 있고 `features/`의 기능 코드를 호출한다.
+명령은 `harness/`에 있고 `features/`의 기능 코드를 호출한다. 현재 `hope diff`는
+독립 하네스에 AI 모델 어댑터가 없음을 알리며, 분석을 완료한 것처럼 보이지 않는다.
 
 ## 플러그인과 스킬
 
@@ -55,15 +63,18 @@ npm run hope -- diff
 claude --plugin-dir ./plugins/hope
 ```
 
-스킬 이름은 `/hope:diff`다. 저장소에는 Claude Code marketplace 목록도 있다.
-공개된 저장소는 다음처럼 추가하고 설치할 수 있다.
+Codex에서는 `$hope:diff`, Claude Code에서는 `/hope:diff`를 사용한다.
+공용 언어와 테마 기본값은 `$hope:settings` 또는 `/hope:settings`로 저장한다.
+저장소에는 Claude Code marketplace 목록도 있다. 공개된 저장소는 다음처럼
+추가하고 설치할 수 있다.
 
 ```bash
 claude plugin marketplace add dkstm95/hope
 claude plugin install hope@hope
 ```
 
-직접 수정하는 원본은 루트 `docs/`와 `features/`에만 둔다.
+직접 수정하는 원본은 루트 `docs/`, `features/`, `settings/`, `locales/`,
+`design/`에 둔다.
 `npm run build:plugin`은 패키지 사본을 갱신한다. 배포 검사는 모든 생성 파일을
 원본과 비교하므로 두 번째 구현이나 SSOT가 될 수 없다.
 
@@ -72,9 +83,11 @@ claude plugin install hope@hope
 
 ## 개발
 
-별도 패키지 설치는 필요하지 않다.
+처음 한 번 잠긴 개발 의존성을 설치한다. 생성된 플러그인은 독립 패키지이므로
+사용자가 플러그인을 실행할 때 별도로 패키지를 설치하지 않는다.
 
 ```bash
+npm install
 npm run check
 ```
 

@@ -11,13 +11,23 @@
   skill or feature implementations.
 - Move the Hope diff product definition to `docs/diff.md` as the shared source
   of truth for both entry paths.
-- Remove the retired Change Request, Review Model, renderer, HTML design,
-  DiffRun, and their tests instead of carrying them into the new diff.
-- Remove the current cleanup implementation because it only managed retired
-  diff runs and review files. Rebuild cleanup after the new artifact lifecycle
-  defines exact ownership.
-- Mark diff as rebuilding and fail clearly without creating a replacement
-  artifact through an improvised path.
+- Replace the retired pipeline with one exact-snapshot GitHub collector,
+  bounded DiffRun inspection protocol, strict analysis model, validator,
+  deterministic renderer, stale-snapshot check, and no-overwrite publication.
+- Add global language and theme settings shared by the harness and plugin,
+  with Korean and English fixed interface text and system, light, and dark
+  themes.
+- Add a responsive, self-contained review design with compact desktop text,
+  larger mobile text, desktop and mobile contents navigation, embedded
+  Gmarket Sans identity type, evidence controls, and accessible theme switching.
+- Highlight supported code evidence with GitHub Light Default and GitHub Dark
+  Default inside code regions only, while unsupported files remain escaped
+  plain text and the generated plugin stays self-contained.
+- Keep automatic AI analysis in the Claude and Codex skill while the
+  independent harness honestly reports that its own model adapter is not
+  available yet.
+- Generate every plugin runtime, locale, design, and product-document copy from
+  root sources and verify the exact release file list.
 
 ## 0.3.2-alpha - 2026-07-19
 

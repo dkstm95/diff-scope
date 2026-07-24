@@ -9,7 +9,7 @@
     {
       "name": "hope",
       "source": "./plugins/hope",
-      "description": "Adds Hope skills to Claude Code. Requires Node.js 20 or newer. Hope diff currently reports its rebuild status.",
+      "description": "Adds evidence-linked GitHub pull-request reviews and shared Hope settings to Claude Code. Requires Node.js 20 or newer.",
       "author": {
         "name": "SeungIl"
       },

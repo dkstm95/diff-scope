@@ -1,0 +1,17 @@
+{
+  "settings.current": "Current Hope settings",
+  "settings.locale": "Language",
+  "settings.localeSource": "Language source",
+  "settings.saved": "Saved Hope settings.",
+  "settings.reset": "Reset Hope settings.",
+  "settings.theme": "Theme",
+  "settings.themeSource": "Theme source",
+  "source.default": "default",
+  "source.host": "host",
+  "source.override": "this run",
+  "source.saved": "saved setting",
+  "source.system": "system",
+  "theme.dark": "Dark",
+  "theme.light": "Light",
+  "theme.system": "System"
+}
